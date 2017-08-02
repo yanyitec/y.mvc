@@ -600,15 +600,11 @@ var makeBinder = ns.makeBinder = function($CONTEXT,ignoreSelf){
 }
 var binders = ns.binders ={};
 var scopeBinder = binders.scope = function(element,observable){
-	var binder = observable["@y.binder.scope"];
-	if(!binder){
-		var ob = this.observable;this.observable = observable;this.element = element;
-		var exprs = this.expressions;this.expressions = [];
-		binder = observable["@y.binder.scope"] = makeBinder(this,true);
-		this.observable = ob;this.element = element;this.expressions=exprs;
-		
-	}
-	binder(element,observable);
+	var current = this.observable;
+	this.observable = observable;
+	if(!binder)binder = observable["@y.binder.scope"] = parseElement(this,true);
+	this.observable = current;
+	return false;
 }
 var eachBinder = binders.each = function(element,observable){
 	var binder = observable["@y.binder.each"];

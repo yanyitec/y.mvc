@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <meta name="Generator" content="EditPlus®">
+  <meta name="Author" content="">
+  <meta name="Keywords" content="">
+  <meta name="Description" content="">
+  <title>Document</title>
+  <script type="text/javascript" src="y.mvc.js"></script>
+ </head>
+ <body>
+<input type="input" value="yiy" name="Username" y-value="$.Data.User.Username" y-readonly="$.Readonly.User.Username" y-visible="$.Visible.User.Username" />
+<div id="console" style="position:fixed;right:0;bottom:0;">
+<div>
+<input type="button" onclick="return getObservableValue()" value="get" />
+<input type="button" onclick="return setObservableValue()" value="set" />
+</div>
+<textarea id="__output" cols="40" rows="40" style="width:500px;height:500px;"></textarea>
+</div>
+<script type="text/javascript">
+<!--
+var ob_instance;
+var getObservableValue=function(){
+	document.getElementById("__output").value = JSON.stringify(ob_instance());
+	return false;
+}
+var setObservableValue=function(){
+	var s = JSON.parse(document.getElementById("__output").value) ;
+	ob_instance(s);
+	return false;
+}
+var context = new Y.BindContext(document.body);
+ob_instance = context.observable;
+var binder = Y.makeBinder(context);	
+getObservableValue();
+//-->
+</script>
+
+ </body>
+</html>
