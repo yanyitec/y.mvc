@@ -10,7 +10,12 @@
   <script type="text/javascript" src="y.mvc.js"></script>
  </head>
  <body>
-<table id="tb"><tbody y-each="$.Users"><tr><td y-value="$.Id"></td><td y-value="$.Name"></td></tr></tbody></table>
+<table id="tb" border="1"><tbody y-each="$.Users">
+<tr>
+	<td y-value="$.Id"></td><td y-value="$.Name"></td>
+	<td><select  y-each="$root.Genders" y-value="$.Gender" ><option y-value="$.value" y-text="$.text"></option></select></td>
+</tr>
+</tbody></table>
 <div id="console" style="position:fixed;right:0;bottom:0;">
 <div>
 <input type="button" onclick="return getObservableValue()" value="get" />
@@ -33,7 +38,19 @@ var setObservableValue=function(){
 var context = new Y.BindContext(document.getElementById("tb"));
 ob_instance = context.observable;
 var binder = Y.makeBinder(context);	
-ob_instance({Users:[{Id:1,Name:"yi"}]});
+
+///注意！！！
+///注意！！！
+///注意 先是有Genders,然后再有Users，需要先更新Genders，Users里面的Gender才能正确的绑定到select上去
+///html 中的绑定也是 y-each在前，先构造好select，再 是y-value，给该select赋值
+ob_instance({
+	Genders:[{text:"Male",value:1},{text:"Female",value:0}]
+	,Users:[
+		{Id:1,Name:"yi",Gender:1}
+		,{Id:2,Name:"yl",Gender:0}
+	]
+});
+
 //-->
 </script>
 
