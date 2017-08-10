@@ -57,7 +57,7 @@ var observable = ns.observable = function(field,object,opts,parent){
 		ob["@y.ob.value"] = newValue;
 		///#DEBUG_END
 		var evt=srcEvt===false?false :new ObservableEvent(self,"value_change",object,field,newValue,oldValue,srcEvt) ;
-		if(evt) if(srcEvt!==false) this.notify(evt);
+		if(evt) if(srcEvt!==false) self.notify(evt);
 		
 		//处理property
 		if(self.is_Array){self.initArray(evt);}
@@ -103,7 +103,7 @@ var observable = ns.observable = function(field,object,opts,parent){
 		var self = ob;
 		self.is_Object = true;
 		
-		_pname = reservedPropnames[pname]||pname;
+		var _pname = reservedPropnames[pname]||pname;
 		var prop = self[_pname];
 		if(!prop){
 			var value = object[field] || (object[field]={});
@@ -122,7 +122,7 @@ var observable = ns.observable = function(field,object,opts,parent){
 		var self = ob,pname = field;
 		var newValue = newObject[pname];
 		var oldValue = object[pname];
-		if(newValue!==oldValue) return self;
+		if(newValue===oldValue) return self;
 		var evt ;
 		if(srcEvt!==false){
 			evt =new ObservableEvent(self,"object_change",obj,pname,newValue,oldValue,srcEvt);
@@ -136,12 +136,14 @@ var observable = ns.observable = function(field,object,opts,parent){
 		///#DEBUG_END
 		if(self.is_Array) self.initArray();
 		if(evt!==false)ob.notify(evt);
-		if(self.is_Object && && evt.propagate_down!==false){
+		if(self.is_Object  && evt.propagate_down!==false){
 			for(var n in self){
 				if(n[0]==="@")continue;
 				var prop = self[n];
-				if(prop && prop.is_Observable)
+				if(prop && prop.is_Observable){
 					prop.ob_object(newValue,evt);
+					evt.propagate_down=true;
+				}
 			}
 		}
 		return ob;
@@ -216,17 +218,17 @@ var observable = ns.observable = function(field,object,opts,parent){
 		var value = obj[pname] ||(obj[pname]={});
 		for(var n in self){
 			var prop = self[n];
-			if(!prop.ob_observable)continue;
-			clone[n] = prop.clone(n,value);
+			if(!prop.is_Observable)continue;
+			clone[n] = prop.clone(n,value,clone);
 		}
 		return clone;
 	}
 	ob.asArray = function(itemTemplate){
 		var self = ob;
-		self.ob_isArray = true;
-		self.ob_isObject = false;
+		self.is_Array = true;
+		self.is_Object = false;
 		object[field] || (object[field]=[]);
-		itemTemplate || ( itemTemplate = observable("0",[],self)) ;
+		itemTemplate || ( itemTemplate = observable("0",[],undefined,self)) ;
 		///#DEBUG_BEGIN
 		ob["@y.ob.itemTemplate"] = itemTemplate;
 		///#DEBUG_END
@@ -329,7 +331,7 @@ var observable = ns.observable = function(field,object,opts,parent){
 				oldValue.push(itemValue);
 			}
 
-			if(srcEvt!==false && evt.bubble_up!==false){
+			if(srcEvt!==false && itemEvt.bubble_up!==false){
 				var evt = new ObservableEvent(self,"clear",object,field,arr,oldValue,srcEvt);
 				self.notify(evt);
 			}
@@ -696,7 +698,7 @@ var eachBinder = binders.each = function(element,observable){
 		context.observable = ob;
 		context.element = el;
 	}
-	valueChange.call(observable,observable());
+	valueChange.call(observable,{value:observable()});
 	observable.subscribe(valueChange);
 	return false;
 }

@@ -12,11 +12,12 @@
  <body>
 <input type="input" value="yiy" name="Username" y-value="$.Data.User.Username" y-readonly="$.Readonly.User.Username" y-visible="$.Visible.User.Username" />
 <div id="console" style="position:fixed;right:0;bottom:0;">
+
+<textarea id="__output" cols="40" rows="40" style="width:500px;height:300px;"></textarea>
 <div>
 <input type="button" onclick="return getObservableValue()" value="get" />
 <input type="button" onclick="return setObservableValue()" value="set" />
 </div>
-<textarea id="__output" cols="40" rows="40" style="width:500px;height:500px;"></textarea>
 </div>
 <script type="text/javascript">
 <!--
