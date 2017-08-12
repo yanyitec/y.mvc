@@ -366,7 +366,7 @@ var observable = ns.observable = function(field,object,opts,parent){
 (function(window,document){
 var ns = window.Y;	
 var camelize = ns.camelize;
-var div = document.createElement("div");
+var divContainer = document.createElement("div");
 var p_maps= {
 	"TD":document.createElement("tr"),
 	"TH":document.createElement("tr"),
@@ -379,16 +379,31 @@ var p_maps= {
 p_maps.THEAD = p_maps.TFOOT = p_maps.TBODY;
 p_maps.DD = p_maps.DT;
 p_maps.OPTIONGROUP = p_maps.OPTION;
-ns.cloneNode = function(node){
-	var p = p_maps[node.tagName] || div;
-	p.innerHTML = node.outerHTML;
-	return p.firstChild;
+
+ns.cloneNode = function(toBeClone){
+	var p = p_maps[toBeClone.tagName] || divContainer;
+	var html =toBeClone.outerHTML+"";
+	p.innerHTML = html;
+	var node= p.firstChild;
+	p.removeChild(node);
+	//p.innerHTML = "";
+	return node;
 }
-if(div.addEventListener){
+ns.makeCloner = function(node){
+	var p = p_maps[toBeClone.tagName] || divContainer;
+	return {
+		container: p,
+		html:node.outerHTML,
+		clone:function(){
+			p.innerHTML = this.html;
+			return p.firstChild;
+		}
+	};
+}
+if(divContainer.addEventListener){
 	ns.attach = function(element,evtname,handler){element.addEventListener(evtname,handler,false);}
 	ns.detech = function(element,evtname,handler){element.removeEventListener(evtname,handler,false);}
-}
-if(div.attachEvent){
+}else if(divContainer.attachEvent){
 	ns.attach = function(element,evtname,handler){element.attachEvent("on" + evtname,handler);}
 	ns.detech = function(element,evtname,handler){element.detechEvent("on" + evtname,handler);}
 }
@@ -581,7 +596,7 @@ var BindExpression = Expression.Bind = function(binderName,params,$CONTEXT){
 	var binder = $CONTEXT.binders[this.binderName];
 	if(!binder) 
 		throw "binder is not found";
-	$CONTEXT.ignoreChildren = binder.apply($CONTEXT,args)===false;
+	if($CONTEXT.parseOnly!==true) $CONTEXT.ignoreChildren = binder.apply($CONTEXT,args)===false;
 	code += ");\r\n";
 	this._code = code;
 	this.toCode = function(){
@@ -675,7 +690,7 @@ var makeBinder = ns.makeBinder = function($CONTEXT,ignoreSelf){
 		var expr = exprs.pop();
 		if(!expr.parentNode){exprs.push(expr);break;}
 	}
-	var expr,codes="this.element = $element;this.observable = $observable;\r\n";
+	var expr,codes="///"+(ignoreSelf?ignoreSelf:"") + "\r\nthis.element = $element;this.observable = $observable;\r\n";
 	while(expr=exprs.shift()){
 		codes += expr.toCode();
 	}
@@ -699,12 +714,14 @@ var eachBinder = binders.each = function(element,observable){
 	var context = this;
 	if(!binder){
 		var tmpNode = ns.cloneNode(element);
+		templateNode =  ns.cloneNode(tmpNode);
 		var itemTemplate = ns.observable(0,[],undefined,observable);
 		var ob = this.observable;this.observable = itemTemplate;this.element = tmpNode;
+		var prevParseOnly = this.parseOnly; this.parseOnly = true;
 		var exprs = this.expressions;this.expressions = [];
-		binder = observable["@y.binder.each"] = makeBinder(this,true);
-		this.observable = ob;this.element = element;this.expressions=exprs;
-		templateNode = binder["@y.binder.templateElement"] = ns.cloneNode(tmpNode);
+		binder = observable["@y.binder.each"] = makeBinder(this,element.getAttribute("y-each"));
+		this.observable = ob;this.element = element;this.expressions=exprs;this.parseOnly = prevParseOnly;
+		binder["@y.binder.templateElement"] = templateNode;
 		observable.asArray(itemTemplate);
 	}else{
 		templateNode = binder["@y.binder.templateElement"];
