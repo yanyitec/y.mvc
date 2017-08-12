@@ -8,122 +8,203 @@ var camelize = ns.camelize = function camelize(attr) {
 var trimRegx = ns.trimRegx = /^\s+|\s+$/;
 var trim = ns.trim = function (val) { return val.replace(trimRegx, ""); }
 
+
 var reservedPropnames={};
-var ObservableEvent = ns.ObservableEvent = function(sender,type,reason,src){
-	this.sender = sender;
+var ObservableEvent = ns.ObservableEvent = function(observable,type,obj,field,value,oldValue,src){
+	this.observable = observable;
 	this.type = type;
-	this.reason = reason;
-	this.src = src===false?undefined:src;
+	this.field = field;
+	this.object = obj;
+	this.value = value;
+	this.oldValue = oldValue;
+	this.propagate_down = true;
+	this.bubble_up = true;
+	if(src instanceof ObservableEvent){
+		if(this.src = src) this.origins = src.origins || src;
+		else this.origins = this;
+	}else{
+		if(this.data = src) {
+			if(this.src = src.$src_event) this.origins=this.src.origins|| this.src;
+			else this.origins = this;
+		}
+	}
+	
 }
-var observable = ns.observable = function(propname,object,parent){
+var observable = ns.observable = function(field,object,opts,parent){
+	// 事件
 	var changeHandlers;
-	var format;
-	propname = propname || "@y.ob.DEFAULT_PROPNAME";
+	// 格式化
+	var formatter;
+	// 域名
+	field = field===undefined || field===null? "@y.ob.DEFAULT_PROPNAME":field;
+	// 对象
 	object = object || {};
 	
+
 	
 	var ob = function(newValue,srcEvt){
 		var self = ob;
-		
-		var oldValue = object[propname];
-		if(newValue===undefined) return format?format(oldValue):oldValue;
+		var oldValue = object[field];
+		if(newValue===undefined) return formatter?formatter(oldValue):oldValue;
 		if(oldValue===newValue) return self;
-		if(self.ob_isArray){
-			self.clear(evt);
-			object[propname] = newValue||(newValue=[]);
-		} else if(self.ob_isObject){
-			object[propname] = newValue||(newValue={});
-		}else object[propname] = newValue;
+		if(!newValue){
+			if(self.is_Array){
+				newValue=[];
+			} else if(self.is_Object){
+				newValue={};
+			}
+		}
+		var evt=srcEvt===false?false :new ObservableEvent(self,"value_change",object,field,newValue,oldValue,srcEvt) ;
+		
+		if(self.is_Array){
+			//只通知子observable
+			self.clear(evt,oldValue);
+			var itemTemplate = self.itemTemplate();
+			for(var i=0,j=newValue.length;i<j;i++){
+				self[i] = itemTemplate.clone(i,newValue,self);
+			}
+		} 
+		object[field] = newValue;
 		///#DEBUG_BEGIN
 		ob["@y.ob.value"] = newValue;
 		///#DEBUG_END
-
-
-		var evt=srcEvt===false?false :new ObservableEvent(self,"change","assign",srcEvt) ;
-		if(evt !==false && changeHandlers){
-			for(var i =0,j=changeHandlers.length;i<j;i++){
-				var fn = changeHandlers.shift();
-				if(fn.call(self,newValue,oldValue,evt)===false) continue;
-				changeHandlers.push(fn);
+		
+		if(evt) self.notify(evt);
+		//处理property
+		if(self.is_Object){
+			for(var n in newValue){
+				var prop = self[reservedPropnames[n]||n];
+				if(prop && prop.is_Observable){
+					prop.ob_object(newValue,evt);
+					evt.propagate_down=true;
+				}	
 			}
 		}
-		
-		if(self.ob_isArray){self.initArray();}
-		else if(self.ob_isObject){
-			for(var n in self){
-				var prop = self[n];
-				if(prop && prop.ob_observable)
-					prop.ob_object(newValue,evt);
-			}
+		if(evt && parent && evt.bubble_up!==false && !evt.stop){
+			parent.bubble_up(evt);
 		}
 		return self;
 	}
+	
 	///#DEBUG_BEGIN
 	ob["@y.ob.object"] = object;
-	ob["@y.ob.propname"] = propname;
-	///#DEBUG_END
-
-	ob.ob_observable = true;
-	ob.toString = function(){return object[propname];}
-	ob.ob_parent = function(){return parent;}
-	///#DEBUG_BEGIN
+	ob["@y.ob.field"] = field;
 	ob["@y.ob.parent"] = parent;
+	ob["@y.ob.value"] = object[field];
 	///#DEBUG_END
-
-	ob.ob_object = function(newObject,srcEvt){
-		if(newObject===undefined)return object;
-		if(newObject===object)return ob;
-		var self = ob;
-		var pname = propname;
-		var newValue = newObject[propname];
-		var oldValue = object[propname];
-		//
-		if(newValue!==oldValue){
-			var evt ;
-			if(srcEvt!==false){
-				evt =new ObservableEvent(self,"change","objectChange",srcEvt);
-			}else evt = false;
-
-			if(self.ob_isArray)self.clear(evt);
-			object = newObject;
-			///#DEBUG_BEGIN
-			ob["@y.ob.object"] = object;
-			ob["@y.ob.value"] = newValue;
-			///#DEBUG_END
-			if(self.ob_isArray) self.initArray();
-
-			if(evt!==false)ob.notify(newValue,oldValue,evt);
-			
-			
-			if(self.ob_isObject){
-				for(var n in self){
-					var prop = self[n];
-					///#DEBUG_BEGIN
-					if(n==="@y.ob.parent") continue;
-					///#DEBUG_END
-					if(prop && prop.ob_observable)
-						prop.ob_object(newValue,evt);
-				}
-			}
-		} 
+	ob.is_Observable = true;
+	ob.is_Object = ob.is_Array = false;
+	ob.toString = function(){return object[field];}
+	ob.ob_opts = function(v){
+		if(v===undefined)return opts||(opts={});
+		if(!opts)opts={};
+		for(var n in v) opts[n]=v[n];
 		return ob;
 	}
-
+	
+	
+	// 树形结构
+	ob.ob_parent = function(){
+		return parent;
+	}
 	ob.ob_root = function(){
 		if(parent)return parent.ob_root();
 		return ob;
 	}
+	ob.ob_prop = function(pname,opts){
+		var self = ob;
+		self.is_Object = true;
+		
+		var _pname = reservedPropnames[pname]||pname;
+		var prop = self[_pname];
+		if(!prop){
+			var value = object[field] || (object[field]={});
+			prop = self[_pname] = observable(pname,value ,opts,self);
+		}else if(opts){
+			prop.ob_opts(opts);
+		}
+		return prop;
+	}
 	
-	ob.notify = function(newValue,oldValue,evt){
+	// 
+	ob.ob_object = function(newObject,srcEvt){
+		var obj = object;
+		if(newObject===undefined)return object;
+		if(newObject===object)return ob;
+		var self = ob,pname = field;
+		
+		var newValue = newObject[pname];
+		var oldValue = object[pname];
+		if(newValue===oldValue) return self;
+		if(!newValue){
+			if(self.is_Array){
+				newValue=obj[pname]=[];
+			}else if(self.is_Object){
+				newValue = obj[pname]={};
+			}
+		}
+		var evt ;
+		if(srcEvt!==false){
+			evt =new ObservableEvent(self,"object_change",obj,pname,newValue,oldValue,srcEvt);
+		}else evt = false;
+		
+		if(self.is_Array){
+			//清洗掉原来的，但不通知自己，因为后面会发送一次object_change通知
+			self.clear(evt,oldValue);
+			var itemTemplate = self.itemTemplate();
+			for(var i=0,j=newValue.length;i<j;i++){
+				self[i] = itemTemplate.clone(i,newValue,self);
+			}
+		}
+		object = newObject;
+		///#DEBUG_BEGIN
+		ob["@y.ob.object"] = object;
+		ob["@y.ob.value"] = newValue;
+		///#DEBUG_END
+		
+		if(evt!==false)ob.notify(evt);
+		if(self.is_Object ){
+			for(var n in self){
+				var prop = self[reservedPropnames[n]||n];
+				if(prop && prop.is_Observable){
+					prop.ob_object(newValue,evt);
+					evt.propagate_down=true;
+				}
+			}
+		}
+		return ob;
+	}
+	ob.ob_name = function(newPropname,srcEvt){
+		if(newPropname===undefined)return field;
+		
+		var newValue = object[newPropname];
+		field = newPropname;
+		ob.ob_object(newValue,srcEvt);
+		return ob;
+	}
+	// 事件
+	ob.notify = function(evt){
 		var handlers = changeHandlers;
 		var self = ob;
 		if(handlers){
-			evt || (evt = new ObservableEvent(self,"notify"));
 			for(var i =0,j=handlers.length;i<j;i++){
 				var fn = handlers.shift();
-				if(fn.call(self,newValue,oldValue,evt)===false) continue;
-				handlers.push(fn);
+				var result = fn.call(self,evt);
+				if(result!==false) handlers.push(fn);
+				if(evt.stop) return self;
 			}
+		}
+		return self;
+	}
+	ob.bubble_up = function(src){
+		var obj = object;
+		var self = ob;
+		var value = object[field];
+		var evt = new ObservableEvent(self,"bubble_up",object,field,value,value,src);
+		evt.bubble_up= true;
+		self.notify(evt);
+		if(evt.bubble_up!==false&& !evt.stop && parent){
+			parent.bubble_up(evt);
 		}
 		return self;
 	}
@@ -145,110 +226,93 @@ var observable = ns.observable = function(propname,object,parent){
 		}
 		return ob;
 	}
-	ob.ob_prop = function(pname){
-		var self = ob;
-		self.ob_isObject = true;
-		
-		_pname = reservedPropnames[pname]||pname;
-		var prop = self[_pname];
-		if(!prop){
-			var value = object[propname] || (object[propname]={});
-			prop = self[_pname] = observable(pname,value ,this);
-		}
-		return prop;
-	}
-	ob.ob_name = function(newPropname,srcEvt){
-		if(newPropname===undefined)return propname;
-		
-		var newValue = object[newPropname];
-		propname = newPropname;
-		ob.ob_object(newValue,srcEvt);
-		return ob;
-	}
-	
-	
+
 	ob.clone = function(pname,obj,parent){
-		pname || (pname = propname);
+		pname || (pname = field);
 		var self = ob;
-		var clone = observable(pname,obj,parent||self.ob_parent());
-		clone.ob_isObject = self.ob_isObject;
-		clone.ob_isArray = self.ob_isArray;
-		if(!self.ob_isObject) return clone;
-		if(self.ob_isArray){
+		var clone = observable(pname,obj, opts,parent||self.ob_parent());
+		clone.is_Object = self.is_Object;
+		clone.is_Array = self.is_Array;
+		
+		if(self.is_Array){
 			clone.asArray(self.itemTemplate());
 			return clone;
 		}
+		if(!self.is_Object) return clone;
 		var value = obj[pname] ||(obj[pname]={});
 		for(var n in self){
+			if(n[0]==="@")continue;
 			var prop = self[n];
-			if(!prop.ob_observable)continue;
-			clone[n] = prop.clone(n,value);
+			if(!prop.is_Observable)continue;
+			clone[n] = prop.clone(n,value,clone);
 		}
 		return clone;
 	}
 	ob.asArray = function(itemTemplate){
 		var self = ob;
-		self.ob_isArray = true;
-		self.ob_isObject = false;
-		object[propname] || (object[propname]=[]);
-		itemTemplate || ( itemTemplate = observable("0",[],self)) ;
+		self.is_Array = true;
+		self.is_Object = false;
+		itemTemplate || ( itemTemplate = observable("0",[],undefined,self)) ;
 		///#DEBUG_BEGIN
 		ob["@y.ob.itemTemplate"] = itemTemplate;
 		///#DEBUG_END
-		self.itemTemplate = function(){return itemTemplate;}
-		self.ob_count = function(){return object[propname].length;}
-		self.initArray = function(){
-			var arr = object[propname];
-			var me = self;
-			for(var i=0,j=arr.length;i<j;i++){
-				me[i] = itemTemplate.clone(i,arr);
-			}
-			return me;
+
+		var arr = object[field] || (object[field]=[]);
+		for(var i=0,j=arr.length;i<j;i++){
+			self[i] = itemTemplate.clone(i,arr,self);
 		}
+
+		self.itemTemplate = function(){return itemTemplate;}
+		self.ob_count = function(){return object[field].length;}
+		
 		self.push = function(itemValue){
-			var arr = object[propname];
+			var arr = object[field];
 			var index = arr.length;
 			arr.push(itemValue);
-			var item = self[c]=itemTemplate.clone(c,arr);
-			var evt = new ObservableEvent(self,"add","push");
+			var item = self[c]=itemTemplate.clone(c,arr,self);
+			var evt = new ObservableEvent(self,"add_item",object,field,arr);
 			evt.index = index;
-			self.notify(arr,arr,evt);
+			self.notify(evt);
 			return item;
 		}
 
 		self.pop = function(){
-			var arr = object[propname];
+			var arr = object[field];
 			var  index = arr.length-1;
 			if(index<0)return;
 			var itemValue = arr.pop();
 			var item = self[index];
 			delete self[index];
-			var evt = new ObservableEvent(self,"remove","pop");
-			evt.index = index;evt.itemValue=itemValue;
-			item.notify(undefined,itemValue,evt);
-			if(!evtArgs.cancelBubble)self.notify(arr,arr,evt);
+			var itemEvt = new ObservableEvent(item,"remove",arr,index,itemValue);
+			item.notify(itemEvt);
+			if(itemEvt.bubble_up!==false && !itemEvt.stop){
+				var evt = new ObservableEvent(self,"remove_item",object,field,arr);
+				evt.index = index;evt.itemValue=itemValue;
+				self.notify(evt);
+				if(evt.bubble_up!==false && !evt.stop)self.bubble_up(evt);
+			}
+			
 			return itemValue;
 		}
 		//添加第一个
 		self.unshift = function(itemValue){
 			var me = self;
-			var arr = object[propname];
+			var arr = object[field];
 			var index = arr.length;
 			arr.unshift(itemValue);
 			for(var i =arr.length,j=0;i>=j;i--){
 				var item = me[i] = me[i-1];
 				item.ob_name(i,false);
 			}
-			var item = self[0]=itemTemplate.clone(0,arr);
-			var evt = new ObservableEvent(self,"add","unshift");
+			var item = self[0]=itemTemplate.clone(0,arr,self);
+			var evt = new ObservableEvent(self,"add_item",object,field,arr);
 			evt.index = index;
-
-			self.notify(arr,arr,evt);
+			self.notify(evt);
 			return item;
 		}
 		self.shift = function(){
 			var me = self;
-			var arr = object[propname];
+			var arr = object[field];
 			var  count = arr.length-1;
 			if(count<0)return;
 			var itemValue = arr.shift();
@@ -259,27 +323,40 @@ var observable = ns.observable = function(propname,object,parent){
 				item.ob_name(i,false);
 			}
 			delete self[count];
-			var evt = new ObservableEvent(self,"remove","shift");
-			evt.index = index;evt.itemValue=itemValue;
-			item.notify(undefined,itemValue,evt);
-			if(!evt.cancelBubble)self.notify(arr,arr,evt);
+			var itemEvt = new ObservableEvent(item,"remove",arr,0,itemValue);
+			item.notify(itemEvt);
+			if(itemEvt.bubble_up!==false&& !itemEvt.stop){
+				var evt = new ObservableEvent(self,"remove_item",object,field,arr);
+				evt.index = index;evt.itemValue=itemValue;
+				self.notify(evt);
+				if(evt.bubble_up!==false && !evt.stop)self.bubble_up(evt);
+			}
 			return itemValue;
 		}
-		self.clear = function(srcEvt){
-			var arr = object[propname];
+		self.clear = function(srcEvt,oldValue){
+			var arr = oldValue || object[field];
 			var me = self;
 			var count = arr.length;
-			var evt = srcEvt===false?false : new ObservableEvent(self,"remove","clear",srcEvt);
-			var oldValue = [];
+			var rplc = [];var stop = false;var bubble_up = true;
 			for(var i =0;i<count;i++){
 				var itemValue = arr.shift();
 				var item = me[i];
 				delete me[i];
 				//evtArgs.index = i;
-				if(evt!==false)item.notify(undefined,itemValue,evt);
-				oldValue.push(itemValue);
+				if(srcEvt!==false && stop){
+					var itemEvt = srcEvt===false?false : new ObservableEvent(self,"remove",arr,i,itemValue,itemValue,srcEvt);
+					item.notify(itemEvt);
+					if(itemEvt.stop) stop = true;
+					if(itemEvt.bubble_up===false) bubble_up = false;
+				}
+				rplc.push(itemValue);
 			}
-			if(evt!==false && !evt.cancelBubble)self.notify(arr,oldValue,evt);
+			if(oldValue===undefined&& srcEvt!==false && bubble_up && !stop ){
+				var evt = new ObservableEvent(self,"clear",object,field,arr,rplc,srcEvt);
+				self.notify(evt);
+			}
+			
+			return self;
 		}
 		return itemTemplate;
 	}
@@ -289,7 +366,7 @@ var observable = ns.observable = function(propname,object,parent){
 (function(window,document){
 var ns = window.Y;	
 var camelize = ns.camelize;
-var div = document.createElement("div");
+var divContainer = document.createElement("div");
 var p_maps= {
 	"TD":document.createElement("tr"),
 	"TH":document.createElement("tr"),
@@ -302,16 +379,31 @@ var p_maps= {
 p_maps.THEAD = p_maps.TFOOT = p_maps.TBODY;
 p_maps.DD = p_maps.DT;
 p_maps.OPTIONGROUP = p_maps.OPTION;
-ns.cloneNode = function(node){
-	var p = p_maps[node.tagName] || div;
-	p.innerHTML = node.outerHTML;
-	return p.firstChild;
+
+ns.cloneNode = function(toBeClone){
+	var p = p_maps[toBeClone.tagName] || divContainer;
+	var html =toBeClone.outerHTML+"";
+	p.innerHTML = html;
+	var node= p.firstChild;
+	p.removeChild(node);
+	//p.innerHTML = "";
+	return node;
 }
-if(div.addEventListener){
+ns.makeCloner = function(node){
+	var p = p_maps[toBeClone.tagName] || divContainer;
+	return {
+		container: p,
+		html:node.outerHTML,
+		clone:function(){
+			p.innerHTML = this.html;
+			return p.firstChild;
+		}
+	};
+}
+if(divContainer.addEventListener){
 	ns.attach = function(element,evtname,handler){element.addEventListener(evtname,handler,false);}
 	ns.detech = function(element,evtname,handler){element.removeEventListener(evtname,handler,false);}
-}
-if(div.attachEvent){
+}else if(divContainer.attachEvent){
 	ns.attach = function(element,evtname,handler){element.attachEvent("on" + evtname,handler);}
 	ns.detech = function(element,evtname,handler){element.detechEvent("on" + evtname,handler);}
 }
@@ -413,7 +505,10 @@ var ObservableExpression = Expression.Observable = function(path,$CONTEXT){
 	var observable = $CONTEXT.observable;
 	for(var i =0,j=paths.length;i<j;i++){
 		var pathname = paths.shift().replace(trimRegx,"");
-		if(pathname=="$root"){innerPaths = ["this.observable.ob_root()"];observable = $CONTEXT.observable.ob_root();continue;}
+		if(pathname=="$root"){
+			innerPaths = ["this.observable.ob_root()"];
+			observable = $CONTEXT.observable.ob_root();continue;
+		}
 		if(pathname=="$" || pathname=="$self") {innerPaths = ["this.observable"];observable = $CONTEXT.observable;continue;}
 		if(pathname=="$parent") {observable = observable.ob_parent(); innerPaths = ["this.observable.ob_parent()"];continue;}
 		observable= observable.ob_prop(pathname);
@@ -498,7 +593,10 @@ var BindExpression = Expression.Bind = function(binderName,params,$CONTEXT){
 		code += "," + par.toCode();
 		args.push(value);
 	}
-	$CONTEXT.ignoreChildren = $CONTEXT.binders[this.binderName].apply($CONTEXT,args)===false;
+	var binder = $CONTEXT.binders[this.binderName];
+	if(!binder) 
+		throw "binder is not found";
+	if($CONTEXT.parseOnly!==true) $CONTEXT.ignoreChildren = binder.apply($CONTEXT,args)===false;
 	code += ");\r\n";
 	this._code = code;
 	this.toCode = function(){
@@ -588,11 +686,11 @@ var parseElement = function($CONTEXT,ignoreSelf){
 var makeBinder = ns.makeBinder = function($CONTEXT,ignoreSelf){
 	parseElement($CONTEXT,ignoreSelf);
 	var exprs = $CONTEXT.expressions;
-	while(true){
+	if(exprs.length>0)while(true){
 		var expr = exprs.pop();
 		if(!expr.parentNode){exprs.push(expr);break;}
 	}
-	var expr,codes="this.element = $element;this.observable = $observable;\r\n";
+	var expr,codes="///"+(ignoreSelf?ignoreSelf:"") + "\r\nthis.element = $element;this.observable = $observable;\r\n";
 	while(expr=exprs.shift()){
 		codes += expr.toCode();
 	}
@@ -600,11 +698,15 @@ var makeBinder = ns.makeBinder = function($CONTEXT,ignoreSelf){
 }
 var binders = ns.binders ={};
 var scopeBinder = binders.scope = function(element,observable){
-	var current = this.observable;
-	this.observable = observable;
-	if(!binder)binder = observable["@y.binder.scope"] = parseElement(this,true);
-	this.observable = current;
-	return false;
+	var binder = observable["@y.binder.scope"];
+	if(!binder){
+		var ob = this.observable;this.observable = observable;this.element = element;
+		var exprs = this.expressions;this.expressions = [];
+		binder = observable["@y.binder.scope"] = makeBinder(this,true);
+		this.observable = ob;this.element = element;this.expressions=exprs;
+		
+	}
+	binder(element,observable);
 }
 var eachBinder = binders.each = function(element,observable){
 	var binder = observable["@y.binder.each"];
@@ -612,22 +714,25 @@ var eachBinder = binders.each = function(element,observable){
 	var context = this;
 	if(!binder){
 		var tmpNode = ns.cloneNode(element);
-		var itemTemplate = observable.asArray();
+		templateNode =  ns.cloneNode(tmpNode);
+		var itemTemplate = ns.observable(0,[],undefined,observable);
 		var ob = this.observable;this.observable = itemTemplate;this.element = tmpNode;
+		var prevParseOnly = this.parseOnly; this.parseOnly = true;
 		var exprs = this.expressions;this.expressions = [];
-		binder = observable["@y.binder.each"] = makeBinder(this,true);
-		this.observable = ob;this.element = element;this.expressions=exprs;
-		templateNode = binder["@y.binder.templateElement"] = ns.cloneNode(tmpNode);
-		observable.initArray();
+		binder = observable["@y.binder.each"] = makeBinder(this,element.getAttribute("y-each"));
+		this.observable = ob;this.element = element;this.expressions=exprs;this.parseOnly = prevParseOnly;
+		binder["@y.binder.templateElement"] = templateNode;
+		observable.asArray(itemTemplate);
 	}else{
 		templateNode = binder["@y.binder.templateElement"];
 	}
-	var valueChange = function(value,oldValue,evtArgs){
+	var valueChange = function(evtArgs){
+		var value = evtArgs.value;
 		element.innerHTML = "";
 		var ob = context.observable;
 		var el = context.element;
 		for(var i =0,j=value.length;i<j;i++){
-			var item = this[i];
+			var item = observable[i];
 			var elem =context.element =  ns.cloneNode(templateNode);
 			context.observable = item;
 			binder.call(context,elem,item);
@@ -638,7 +743,7 @@ var eachBinder = binders.each = function(element,observable){
 		context.observable = ob;
 		context.element = el;
 	}
-	valueChange.call(observable,observable());
+	valueChange.call(observable,{value:observable()});
 	observable.subscribe(valueChange);
 	return false;
 }
@@ -658,27 +763,29 @@ var getValueBinderExpression = function(element,expr,$CONTEXT){
 		if(type==="button" || type==="reset" || type==="submit") return BindExpression.parse("value-button",expr,$CONTEXT);
 		if(type==="check" ) return BindExpression.parse("value-check",expr,$CONTEXT);
 		if(type==="radio" ) return BindExpression.parse("value-radio",expr,$CONTEXT);
-		return BindExpression.parse("value-text",expr,$CONTEXT);
+		return BindExpression.parse("value-textbox",expr,$CONTEXT);
 	}
-	return BindExpression.parse("value-label",expr,$CONTEXT);
+	if(tagName=="OPTION") return BindExpression.parse("value-text",expr,$CONTEXT);
+	return BindExpression.parse("text",expr,$CONTEXT);
 }
-var textBinder = binders["value-text"] = function(element,observable,format){
+binders["value-textbox"] = function(element,observable,format){
 	var context = this;
 	var val = observable();
 	if(val===undefined)observable(element.value);
 	else element.value = val;
-	observable.subscribe(function(value){
-		element.value = value;
+	observable.subscribe(function(e){
+		element.value = e.value;
 	});
 	attach(element,"keyup",function(){observable(element.value);});
 	attach(element,"blur",function(){observable(element.value);});
 	
 }
-var selectBinder = binders["value-select"] = function(element,observable,format){
+binders["value-select"] = function(element,observable,format){
 	var context = this;
 	var val = observable();
 	var opts = element.options;
-	var valuechange = function(value){
+	var valuechange = function(e){
+		var value = e.value;
 		var opts = element.options;
 		for(var i=0,j=opts.length;i<j;i++){
 			if(opts[i].value===value) {
@@ -688,18 +795,31 @@ var selectBinder = binders["value-select"] = function(element,observable,format)
 			}
 		}
 	}
+	var setElement = function(value){
+		if(value===undefined || value===null)value="";else value = value.toString();
+		var opts = element.options;
+		for(var i=0,j=opts.length;i<j;i++){
+			var opt = opts[i];
+			if(opt.value===value){
+				opt.selected=true;
+				element.selectedIndex = i;
+				break;
+			}
+		}
+	}
 	if(val===undefined){
-		var value = opts[element.selectedIndex].value;
+		var sIndex = element.selectedIndex;
+		if(sIndex==-1)sIndex=0;
+		var opt = opts[sIndex];
+		var value = opt ? opt.value : undefined;
 		observable(value);
 	}else{
-		valuechange(val);
+		setElement(val);
 	}
 	
 	observable.subscribe(valuechange);
-	attach(element,"change",function(){
-		var opts = element.options;
-		var value = opts[element.selectedIndex].value;
-		subscribe(value);
+	attach(element,"change",function(e){
+		setElement(e.value);
 	});
 	
 	
@@ -707,8 +827,8 @@ var selectBinder = binders["value-select"] = function(element,observable,format)
 var checkBinder = binders["value-check"] = binders["value-radio"] = function(element,observable,format){
 	var context = this;
 	observable(element.checked?element.value:undefined);
-	observable.subscribe(function(value){
-		if(value===element.value){
+	observable.subscribe(function(e){
+		if(e.value===element.value){
 			element.checked = true;
 		}else {
 			element.checked = false;
@@ -721,25 +841,36 @@ var checkBinder = binders["value-check"] = binders["value-radio"] = function(ele
 var buttonBinder = binders["value-button"] = function(element,observable,format){
 	var context = this;
 	observable(element.value);
-	observable.subscribe(function(value){
-		element.value = value;
+	observable.subscribe(function(e){
+		element.value = e.value;
 	});
 	
 } 
-var textBinder =binders["value-label"] = function(element,observable,format){
+binders["value-text"] = function(element,observable,format){
+	var context = this;
+	var val = observable();
+	if(val===undefined)observable(element.value);
+	else element.value = val;
+	observable.subscribe(function(e){
+		element.value = e.value;
+	});
+}
+binders["text"]= function(element,observable,format){
 	var context = this;
 	var val = observable();
 	if(val===undefined)observable(element.innerHTML);
 	else element.innerHTML = val;
-	observable.subscribe(function(value){
-		element.innerHTML = value;
+	observable.subscribe(function(e){
+		element.innerHTML = e.value;
 	});
 }
+
 binders.visible = function(element,observable){
 	var context = this;
 	var getStyle = ns.getStyle;
 	observable(element.style.display==="none"?false:true);
-	observable.subscribe(function(value){
+	observable.subscribe(function(e){
+		var value =e.value;
 		if(value && value!=="0" && value!=="false"){
 			var displayValue = element["@y.displayValue"];
 			if(displayValue===undefined)displayValue = element["@y.displayValue"]=getStyle(element);
@@ -755,7 +886,8 @@ binders.visible = function(element,observable){
 binders.readonly = function(element,observable){
 	var context = this;
 	observable(element.readonly?true:false);
-	observable.subscribe(function(value){
+	observable.subscribe(function(e){
+		var value = e.value;
 		if(value && value!=="0" && value!=="false"){
 			element.readonly= true;
 			element.setAttribute("readonly","readonly");
