@@ -1,0 +1,274 @@
+
+        ///#DEBUG_BEGIN
+        ob["@y.ob.object"] = object;
+        ob["@y.ob.field"] = field;
+        ob["@y.ob.parent"] = parent;
+        ob["@y.ob.value"] = object[field];
+        ///#DEBUG_END
+        ob.is_Observable = true;
+        ob.is_Object = ob.is_Array = false;
+        ob.toString = function(){return object[field];}
+        ob.ob_opts = function(v){
+            if(v===undefined)return opts||(opts={});
+            if(!opts)opts={};
+            for(let n in v) opts[n]=v[n];
+            return ob;
+        }
+        
+        
+        // 树形结构
+        ob.ob_superior = ():IObservable=> superior;
+        
+        ob.ob_root = ():IObservable=>{
+            if(superior)return superior.ob_root();
+            return ob;
+        };
+        ob.ob_prop = function(pname:string|number,opts?){
+            let self:IObservable = ob;
+            self.is_Object = true;
+            
+            let _pname:string = reservedPropnames[pname]||pname;
+            let prop:IObservable = self[_pname];
+            if(!prop){
+                let value = object[field] || (object[field]={});
+                prop = self[_pname] = observable(pname,value ,opts,self);
+            }else if(opts){
+                prop.ob_opts(opts);
+            }
+            return prop;
+        }
+        
+        // 
+        ob.ob_object = function(newObject:object,srcEvt?:ObservableEvent|boolean){
+            let obj:object = object;
+            if(newObject===undefined)return object;
+            if(newObject===object)return ob;
+            let self:IObservable = ob,pname:string|boolean = field;
+            
+            let newValue:any = newObject[pname];
+            let oldValue:any = object[pname];
+            if(newValue===oldValue) return self;
+            if(!newValue){
+                if(self.is_Array){
+                    newValue=obj[pname]=[];
+                }else if(self.is_Object){
+                    newValue = obj[pname]={};
+                }
+            }
+            let evt:ObservableEvent ;
+            if(srcEvt!==false){
+                evt =new ObservableEvent(self,"object_change",obj,pname,newValue,oldValue,srcEvt);
+            }
+            
+            if(self.is_Array){
+                //清洗掉原来的，但不通知自己，因为后面会发送一次object_change通知
+                self.clear(evt,oldValue);
+                let itemTemplate:IObservable = self.ob_itemTemplate();
+                for(let i=0,j=newValue.length;i<j;i++){
+                    self[i] = itemTemplate.clone(i,newValue,self);
+                }
+            }
+            object = newObject;
+            ///#DEBUG_BEGIN
+            ob["@y.ob.object"] = object;
+            ob["@y.ob.value"] = newValue;
+            ///#DEBUG_END
+            
+            if(evt!==false)ob.notify(evt);
+            if(self.is_Object ){
+                for(let n in self){
+                    let prop = self[reservedPropnames[n]||n];
+                    if(prop && prop.is_Observable){
+                        prop.ob_object(newValue,evt);
+                        evt.propagate_down=true;
+                    }
+                }
+            }
+            return ob;
+        }
+        ob.ob_field = function(newPropname:string|number,srcEvt?:ObservableEvent|boolean){
+            if(newPropname===undefined)return field;
+            
+            let newValue:any = object[newPropname];
+            field = newPropname;
+            ob.ob_object(newValue,srcEvt);
+            return ob;
+        }
+        // 事件
+        ob.notify = function(evt:ObservableEvent){
+            let handlers: Array<IObservableEventHandler> = changeHandlers;
+            let self:IObservable = ob;
+            if(handlers){
+                for(let i =0,j=handlers.length;i<j;i++){
+                    let fn:IObservableEventHandler = handlers.shift();
+                    let result:any = fn.call(self,evt);
+                    if(result!==false) handlers.push(fn);
+                    if(evt.stop) return self;
+                }
+            }
+            return self;
+        }
+        ob.bubble_up = function(src?:ObservableEvent):IObservable{
+            let obj:object = object;
+            let self:IObservable = ob;
+            let value:any = object[field];
+            let evt:ObservableEvent = new ObservableEvent(self,"bubble_up",object,field,value,value,src);
+            evt.bubble= true;
+            self.notify(evt);
+            if(evt.bubble!==false&& !evt.stop && superior){
+                superior.bubble_up(evt);
+            }
+            return self;
+        }
+
+        ob.subscribe = function(handler:IObservableEventHandler):IObservable{
+            let handlers:Array<IObservableEventHandler> =changeHandlers || (changeHandlers=[]);
+            ///#DEBUG_BEGIN
+            ob["@y.ob.changeHandlers"] = handlers;
+            ///#DEBUG_END
+            changeHandlers.push(handler);
+            return ob;
+        }
+        ob.unsubscribe = function(handler:IObservableEventHandler):IObservable{
+            let handlers:Array<IObservableEventHandler> = changeHandlers ;
+            if(handlers===undefined)return ob;
+            for(let i =0,j=handlers.length;i<j;i++){
+                let fn = handlers.shift();
+                if(fn!==handler) handlers.push(fn);
+            }
+            return ob;
+        }
+
+        ob.clone = function(pname?:string|number,obj?:object,parent:IObservable){
+            pname || (pname = field);
+            let self = ob;
+            let clone = observable(pname,obj, opts,parent||self.ob_superior());
+            clone.is_Object = self.is_Object;
+            clone.is_Array = self.is_Array;
+            
+            if(self.is_Array){
+                clone.asArray(self.ob_itemTemplate());
+                return clone;
+            }
+            if(!self.is_Object) return clone;
+            let value = obj[pname] ||(obj[pname]={});
+            for(let n in self){
+                if(n[0]==="@")continue;
+                let prop = self[n];
+                if(!prop.is_Observable)continue;
+                clone[n] = prop.clone(n,value,clone);
+            }
+            return clone;
+        }
+        ob.asArray = function(itemTemplate?:IObservable):IObservable{
+            let self:IObservable = ob;
+            self.is_Array = true;
+            self.is_Object = false;
+            itemTemplate || ( itemTemplate = observable("0",[],undefined,self)) ;
+            ///#DEBUG_BEGIN
+            ob["@y.ob.itemTemplate"] = itemTemplate;
+            ///#DEBUG_END
+
+            let arr:[] = object[field] || (object[field]=[]);
+            for(let i=0,j=arr.length;i<j;i++){
+                self[i] = itemTemplate.clone(i,arr,self);
+            }
+
+            self.ob_itemTemplate = ():IObservable=>itemTemplate;
+            self.ob_count = ():number=> object[field].length;
+            
+            self.push = (itemValue:any):IObservable=>{
+                let arr = object[field];
+                let index:number = arr.length;
+                arr.push(itemValue);
+                let item = self[index]=itemTemplate.clone(index,arr,self);
+                let evt:ObservableEvent = new ObservableEvent(self,"add_item",object,field,arr);
+                evt.index = index;
+                self.notify(evt);
+                return item;
+            }
+
+            self.pop = ():any=>{
+                let arr:[] = object[field];
+                let  index:number = arr.length-1;
+                if(index<0)return;
+                let itemValue:any = arr.pop();
+                let item :IObservable = self[index];
+                delete self[index];
+                let itemEvt:ObservableEvent = new ObservableEvent(item,"remove",arr,index,itemValue);
+                item.notify(itemEvt);
+                if(itemEvt.bubble!==false && !itemEvt.stop){
+                    let evt:ObservableEvent = new ObservableEvent(self,"remove_item",object,field,arr);
+                    evt.index = index;evt.itemValue=itemValue;
+                    self.notify(evt);
+                    if(evt.bubble!==false && !evt.stop)self.bubble_up(evt);
+                }
+                
+                return itemValue;
+            }
+            //添加第一个
+            self.unshift = function(itemValue:any):IObservable{
+                let me :IObservable = self;
+                let arr :[]= object[field];
+                let index:number = arr.length;
+                arr.unshift(itemValue);
+                for(let i =arr.length,j=0;i>=j;i--){
+                    let item = me[i] = me[i-1];
+                    item.ob_field(i,false);
+                }
+                let item:IObservable = self[0]=itemTemplate.clone(0,arr,self);
+                let evt:ObservableEvent = new ObservableEvent(self,"add_item",object,field,arr);
+                evt.index = index;
+                self.notify(evt);
+                return item;
+            }
+            self.shift = function():any{
+                let me :IObservable = self;
+                let arr : []= object[field];
+                let  count:number = arr.length-1;
+                if(count<0)return;
+                let itemValue:any = arr.shift();
+                let item :IObservable = self[0];
+                
+                for(let i =1,j=count;i<=j;i++){
+                    let item = me[i-1] = me[i];
+                    item.ob_field(i,false);
+                }
+                delete self[count];
+                let itemEvt:ObservableEvent = new ObservableEvent(item,"remove",arr,0,itemValue);
+                item.notify(itemEvt);
+                if(itemEvt.bubble!==false&& !itemEvt.stop){
+                    let evt:ObservableEvent = new ObservableEvent(self,"remove_item",object,field,arr);
+                    evt.index = 0 ;evt.itemValue=itemValue;
+                    self.notify(evt);
+                    if(evt.bubble!==false && !evt.stop)self.bubble_up(evt);
+                }
+                return itemValue;
+            }
+            self.clear = function(srcEvt,oldValue){
+                let arr :[]= oldValue || object[field];
+                let me : IObservable = self;
+                let count :number = arr.length;
+                let rplc:[] = [];let stop:boolean = false;let bubble_up: boolean = true;
+                for(let i =0;i<count;i++){
+                    let itemValue:any = arr.shift();
+                    let item:IObservable = me[i];
+                    delete me[i];
+                    //evtArgs.index = i;
+                    if(srcEvt!==false && stop){
+                        let itemEvt:ObservableEvent = srcEvt===false?null : new ObservableEvent(self,"remove",arr,i,itemValue,itemValue,srcEvt);
+                        item.notify(itemEvt);
+                        if(itemEvt.stop) stop = true;
+                        if(itemEvt.bubble_up===false) bubble_up = false;
+                    }
+                    rplc.push(itemValue);
+                }
+                if(oldValue===undefined&& srcEvt!==false && bubble_up && !stop ){
+                    let evt = new ObservableEvent(self,"clear",object,field,arr,rplc,srcEvt);
+                    self.notify(evt);
+                }
+                
+                return self;
+            }
+            return itemTemplate;
+        }
