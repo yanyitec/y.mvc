@@ -25,6 +25,9 @@ namespace Y
      */
     export function trim(text:string):string { return text.replace(trimRegx, ""); }
 
+    ///////////////////////////////////////////////////////////////
+    /// Observable
+    ///
     let reservedPropnames:{[index:string]:string}={};
 
     /**
@@ -109,12 +112,31 @@ namespace Y
         (value?:any,srcEvt?:ObservableEvent|boolean):any;
         //[index:number]:IObservable;
 
+        /** 指示该对象是否是Observable */
         is_Observable?:boolean;
+        /** 指示该observable是否是Object(具有prop) */
         is_Object?:boolean;
+        /** 指示该observable是否是array */
         is_Array?:boolean;
 
+        /**
+         * 获取/设置 该observable上的额外数据
+         * @method
+         * @param {any} opts - 额外数据(设置)/undefined(获取)
+         * @return -获取返回额外数据；设置返回IObservable
+         */
         ob_opts?(opts?:any):any;
+        /**
+         * 上级observable
+         * @method
+         * @return {IObservable} - 返回IObservable
+         */
         ob_superior?():IObservable;
+        /**
+         * 根observable
+         * @method
+         * @return {IObservable} - 返回IObservable
+         */
         ob_root?():IObservable;
         ob_prop?(name:string,opts?:any):IObservable;
         ob_object?(object:object,srcEvt?:ObservableEvent|boolean):IObservable|object;
@@ -138,8 +160,16 @@ namespace Y
     }
 
     
-
-    export function observable(field?:string|number,object?:object,opts?:any,superior?:IObservable){
+    /**
+    * 创建一个IObservable对象
+    * @method
+    * @param {string|number} field - 数据域的名称
+    * @param {object} object - 在那个对象上的数据
+    * @param {any} opts - 该observable上的额外的数据
+    * @param {IObservable} superior - 该observable的上级对象
+    * @return -获取返回额外数据；设置返回IObservable
+    */
+    export function observable(field?:string|number,object?:object,opts?:any,superior?:IObservable):IObservable{
         // 事件
         let changeHandlers:Array<IObservableEventHandler>;
         // 格式化
@@ -361,7 +391,7 @@ namespace Y
         ob.asArray = function(itemTemplate?:IObservable):IObservable{
             let self:IObservable = ob;
             self.is_Array = true;
-            self.is_Object = false;
+            //self.is_Object = false;
             itemTemplate || ( itemTemplate = observable("0",[],undefined,self)) ;
             ///#DEBUG_BEGIN
             ob["@y.ob.itemTemplate"] = itemTemplate;
@@ -472,6 +502,623 @@ namespace Y
 
         return ob;
     }
-        
+    ///////////////////////////////////////////////////////////////
+    /// DOM
+    ////////////////////////////////////////////////////////////////
 
+    var divContainer:HTMLDivElement = document.createElement("div");
+    var p_maps:{[index:string]:HTMLElement}= {
+        "TD":document.createElement("tr"),
+        "TH":document.createElement("tr"),
+        "TR":document.createElement("tbody"),
+        "TBODY":document.createElement("table"),
+        "LI":document.createElement("ul"),
+        "OPTION":document.createElement("select"),
+        "DT":document.createElement("dl")
+    };
+    p_maps.THEAD = p_maps.TFOOT = p_maps.TBODY;
+    p_maps.DD = p_maps.DT;
+    p_maps.OPTIONGROUP = p_maps.OPTION;
+
+    let displayValues :{[index:string]:string}= {};
+    
+    /**
+    * 克隆一个html元素
+    * @method
+    * @param {HTMLElement} toBeClone - 要克隆的元素
+    * @return - 克隆的新的元素。其结构与属性与toBeClone一模一样
+    */
+    export function cloneNode(toBeClone:HTMLElement):HTMLElement {
+        let p:HTMLElement = p_maps[toBeClone.tagName] || divContainer;
+        let html:string =toBeClone.outerHTML+"";
+        p.innerHTML = html;
+        let node :HTMLElement= p.firstChild as HTMLElement;
+        p.removeChild(node);
+        return node;
+    }   
+
+    export let attach :(element:HTMLElement,evtname:string,handler:Function)=>void;
+    export let detech :(element:HTMLElement,evtname:string,handler:Function)=>void;
+    if(divContainer.addEventListener){
+        attach = (element:HTMLElement,evtname:string,handler:Function):void => element.addEventListener(evtname,handler as EventListenerOrEventListenerObject,false);
+        detech = (element:HTMLElement,evtname:string,handler:Function):void => element.removeEventListener(evtname,handler as EventListenerOrEventListenerObject,false);
+    }else if(divContainer["attachEvent"]){
+        attach = (element:HTMLElement,evtname:string,handler:Function):void =>(element as any).attachEvent("on" + evtname,handler);
+        detech = (element:HTMLElement,evtname:string,handler:Function):void =>(element as any).detechEvent("on" + evtname,handler);
+    }
+
+    export function setStyle(elem:HTMLElement, style:string, value:string) { elem.style[camelize(style)] = value; }
+    
+    export let getStyle:(elem:HTMLElement,style:string)=>string;
+    // 主流浏览器
+    if (window.getComputedStyle) {
+        getStyle = (elem:HTMLElement, style:string)=> getComputedStyle(elem, null).getPropertyValue(style);
+    } else {
+        function getIEOpacity(elem) {
+            let filter:any = null;
+
+            // 早期的 IE 中要设置透明度有两个方法：
+            // 1、alpha(opacity=0)
+            // 2、filter:progid:DXImageTransform.Microsoft.gradient( GradientType= 0 , startColorstr = ‘#ccccc’, endColorstr = ‘#ddddd’ );
+            // 利用正则匹配
+            filter = elem.style.filter.match(/progid:DXImageTransform.Microsoft.Alpha\(.?opacity=(.*).?\)/i) || elem.style.filter.match(/alpha\(opacity=(.*)\)/i);
+
+            if (filter) {
+                let value:number = parseFloat(filter);
+                if (NaN!==value) {
+                    // 转化为标准结果
+                    return value ? value / 100 : 0;
+                }
+            }
+            // 透明度的值默认返回 1
+            return 1;
+        }
+        getStyle = function (elem:HTMLElement, style:string):string {
+            // IE 下获取透明度
+            if (style == "opacity") {
+                getIEOpacity(elem);
+                // IE687 下获取浮动使用 styleFloat
+            } else if (style == "float") {
+                return (elem as any).currentStyle.getAttribute("styleFloat");
+                // 取高宽使用 getBoundingClientRect
+            } else if ((style == "width" || style == "height") && ((elem as any).currentStyle[style] == "auto")) {
+                var clientRect = elem.getBoundingClientRect();
+
+                return (style == "width" ? clientRect.right - clientRect.left : clientRect.bottom - clientRect.top) + "px";
+            }
+            // 其他样式，无需特殊处理
+            return (elem as any).currentStyle.getAttribute(camelize(style));
+        };
+
+
+    }
+    export let setOpacity :(elem:HTMLElement,val:string)=>void = (elem:HTMLElement,val:string)=> {
+        let value:number = parseFloat(val);
+        elem.style.opacity = value.toString();
+        elem.style.filter = "alpha(opacity=" + (value * 100) + ")";
+        return elem;
+    }
+    
+    export function hasClass(element:HTMLElement,css:string):boolean{
+        let cssStr:string = element.className;
+        let begin:number = cssStr.indexOf(css);
+        if(begin<0)return false;
+        let end = begin + css.length;
+        if(begin==0){
+            if(end ==cssStr.length)return true;
+            return /^\s$/.test(cssStr[begin+1]);
+        }
+        if(!/^\s$/.test(cssStr[begin-1]))return false;
+        if(end==cssStr.length)return true;
+        return /^\s$/.test(cssStr[end+1]);
+    }
+
+    export function addClass(element:HTMLElement,css:string):boolean{
+        if(hasClass(element,css))return false;
+        var cssStr = element.className;
+        if(cssStr==="") element.className = css;
+        else if(/^\s$/.test(cssStr[cssStr.length-1]))cssStr += css;
+        else cssStr += ' ' + css;
+        element.className = cssStr;
+        return true;
+    }
+    export function removeClass(element:HTMLElement,css:string):boolean{
+        let cssStr:string = element.className;
+        let s :Array<string> = cssStr.split(/\s+/);
+        let hasIt :boolean = false;
+        for(let i=0,j=s.length;i<j;i++){
+            let c = s.shift();
+            if(c!==css)s.push(c);
+            else hasIt = true;
+        }
+        if(hasIt)element.className = s.join(" ");
+        return hasIt;
+    }
+
+    ////////////////////////////
+    /// Expression
+
+    let propReg:string = "[\\w\\u4e00-\\u9fa5]+";
+    let pathReg:string = propReg + "(?:\\s*.\\s*" + propReg + ")*";
+    export class BindContext{
+        public element:HTMLElement;
+        public binders:{[index:string]:Function};
+        public observable:IObservable;
+        public text:(key:string,isLazy?:boolean)=>string;
+
+        public parseOnly:boolean;
+        public ignoreChildren:boolean;
+
+        public expressions:Array<BindExpression>;
+        public constructor(element:HTMLElement,ob_instance:IObservable,controller:any){
+            this.element = element;
+            this.observable = ob_instance || observable();
+            if(controller.TEXT)this.text=(key:string,isLazy?:boolean):string=>controller.TEXT(key,isLazy);
+            else {
+                this.text = (key:string,isLazy?:boolean):string=>{
+                    let ctrlr:any = controller;
+                    while(ctrlr){
+                        let lngs:{[index:string]:string} = ctrlr.$lngs;
+                        let txt = lngs[key];
+                        if(txt!==undefined)return txt;
+                        ctrlr = ctrlr._$container;
+                    }
+                    return key;
+                }
+            }
+            //this.binders = ns.binders;
+            //this.label = function(key,lazy){
+            //    return lazy ?{toString:function(){return key}}:key;
+            //}
+        }
+    }
+    export abstract class BindExpression{
+        abstract toCode():string;
+        //abstract execute(context:BindContext):any;
+    }
+    let expressions: {[index:string]:Function}= BindExpression as any;
+    export abstract class ValueExpression extends BindExpression{
+
+        abstract getValue(context:BindContext):any;
+        static parse(exprText:string,context:BindContext):ValueExpression{
+            var expr:ValueExpression = ObservableExpression.parse(exprText,context);
+            if(expr==null) expr = TextExpression.parse(exprText,context);
+            if(expr==null) expr = new ConstantExpression(exprText,context);
+            return expr;
+        }
+    }
+    expressions.ValueExpression = ValueExpression;
+    
+    
+    
+    
+
+    class ObservableExpression extends ValueExpression{
+        path:string;
+        observable:IObservable;
+        constructor(path:string,context:BindContext){
+            super();
+            this.path = path;
+            var paths = path.split(".");
+            var innerPaths = ["this.observable"];
+            var observable = context.observable;
+            for(var i =0,j=paths.length;i<j;i++){
+                var pathname = paths.shift().replace(trimRegx,"");
+                if(pathname=="$root"){
+                    innerPaths = ["this.observable.ob_root()"];
+                    observable = context.observable.ob_root();continue;
+                }
+                if(pathname=="$" || pathname=="$self") {innerPaths = ["this.observable"];observable = context.observable;continue;}
+                if(pathname=="$parent") {observable = observable.ob_superior(); innerPaths = ["this.observable.ob_parent()"];continue;}
+                observable= observable.ob_prop(pathname);
+                innerPaths.push(pathname);
+            }
+            this.path = innerPaths.join(".");
+            this.observable = observable;
+        }
+        getValue(context:BindContext):any{return this.observable;}
+        toCode():string{return this.path;}
+
+        static regText:string = "^\\s*\\$|\\$self|\\$parent|\\$root\\s*.\\s*" + pathReg + "\\s*$";
+        static regx = new RegExp(ObservableExpression.regText);
+        static parse(exprText:string , context:BindContext):ObservableExpression{
+            if(ObservableExpression.regx.test(exprText)) return new ObservableExpression(exprText,context);
+        }
+    }
+    expressions["Observable"] = ObservableExpression;
+
+    class TextExpression extends ValueExpression{
+        key:string;
+        lazy:boolean;
+        constructor(key:string,context:BindContext){
+            super();
+            this.key = key;
+        }
+        toCode():string{return "this.text(\"" + this.key + "\","+(this.lazy?"true":"false")+")";}
+        getValue(context:BindContext){return context.text(this.key);}
+        static regText:string = "^\\s*##(" + pathReg + ")$";
+        static regx :RegExp =  new RegExp(TextExpression.regText);
+        static parse(exprText:string ,context:BindContext):TextExpression{
+            var match = exprText.match(TextExpression.regx);
+            if(match) return new TextExpression(match[1],context);
+        }
+    }
+    expressions.Text  = TextExpression;
+
+    class ConstantExpression extends ValueExpression{
+        value:string;
+        constructor(value:string ,context:BindContext){
+            super();
+            this.value = value.replace(trimQuoteRegx,"");
+        }
+        toCode():string{ return  "\"" + this.value.replace(/"/,"\\\"") + "\"";}
+        getValue(contex:BindContext):string{return this.value;}
+        static regText:string = "(?:\"([^\"]*)\")|(?:'([^']*)')|(?:([^$.,()#]*))";
+        static regx = new RegExp(ConstantExpression.regText);
+        static parse (exprText:string,context:BindContext):ConstantExpression{
+            var match = exprText.match(ConstantExpression.regx);
+            if(match) return new ConstantExpression(match[1],context);
+        }
+    }    
+    expressions.Constant = ConstantExpression;
+    export let trimQuoteRegx:RegExp = /(^\s*['"])|(['"]\s*$)/g;
+
+    abstract class ChildExpression extends BindExpression{
+
+    }
+    
+    //alert(expr.match(ConstantExpression.Regx));
+    class ChildBeginExpression extends ChildExpression{
+        index:number;
+        parentNode:HTMLElement;
+        constructor(at:number,parentNode:HTMLElement,context:BindContext){
+            super();
+            this.index = at;
+            this.parentNode = parentNode;
+            if(parentNode!=context.element) throw "Invalid Arguments";
+            context.element = context.element.childNodes[this.index] as HTMLElement;
+        }
+        toCode(){ return "this.element = this.element.childNodes["+this.index+"];\r\n"; }
+    }
+    expressions.ChildBegin = ChildBeginExpression;
+
+    class ChildEndExpression extends ChildExpression{
+        index:number;
+        parentNode:HTMLElement;
+
+        constructor(at:number,parentNode:HTMLElement,context:BindContext){
+            super();
+            this.index = at;
+            this.parentNode = parentNode;
+            context.element = context.element.parentNode as HTMLElement;
+            if(parentNode!=context.element) throw "Invalid Arguments";
+        }
+        toCode():string{ return "this.element = this.element.parentNode;\r\n"; }
+    }
+    expressions.ChildEnd = ChildEndExpression;
+
+    class BinderExpression extends BindExpression{
+        binderName:string;
+        parameters:Array<ValueExpression>;
+        private _code:string;
+        constructor(binderName:string , params:Array<ValueExpression>,context:BindContext){
+            super();
+            this.binderName = binderName;
+            this.parameters = params;
+            var args = [context.element];
+            let code = "this.binders[\""+binderName+"\"].call(this,this.element";
+            for(let i =0,j=this.parameters.length;i<j;i++){
+                let par:ValueExpression = this.parameters[i];
+                let value:any = par.getValue(context);
+                code += "," + par.toCode();
+                args.push(value);
+            }
+            let binder = context.binders[this.binderName];
+            if(!binder) 
+                throw "binder is not found";
+            if(context.parseOnly!==true) context.ignoreChildren = binder.apply(context,args)===false;
+            code += ");\r\n";
+            this._code = code;
+        }
+        toCode(){return this._code;}
+        static parseArguments(argsText:string):Array<string>{
+            let argTexts:Array<string> = argsText.split(",");
+            let argExprs:Array<string> = [];
+            let strs:Array<string>=undefined;
+            let startMatch:RegExpMatchArray = undefined;
+            for(let i =0,j=argTexts.length;i<j;i++){
+                let expr:string = argTexts[i];
+                if(startMatch){
+                    strs.push(expr);
+                    var endMatch = expr.match(strEndRegx);
+                    if(endMatch && endMatch[1]==startMatch[1]){
+                        argExprs.push(strs.join(""));
+                        strs=startMatch=undefined;
+                        continue;
+                    }
+                    continue;
+                }
+                if(startMatch=expr.match(strStartRegx)){
+                    strs=[expr];
+                    continue;
+                }
+                argExprs.push(expr);
+            }
+            if(startMatch) throw "Invalid Arguments";
+            return argExprs;
+        }
+        static parse(binderName:string,argsText:string,context:BindContext):BinderExpression{
+            let argTexts:Array<string> = BinderExpression.parseArguments(argsText);
+            var args:Array<ValueExpression> = [];
+            for(let i =0,j=argTexts.length;i<j;i++){
+                let argText:string = argTexts[i];
+                args.push(ValueExpression.parse(argText,context));
+            }
+            return new BinderExpression(binderName,args,context);
+        }
+    }
+    expressions.Binder = BinderExpression;
+    
+    let strStartRegx:RegExp = /^\s*(["'])/g;
+    let strEndRegx:RegExp = /(["']\s*$)/g;
+
+    let getValueBinderExpression:Function;
+
+    export  function parseElement(context:BindContext,ignoreSelf?:boolean):Function{
+        var element = context.element;
+        if(!element.tagName)return;
+        var observable = context.observable;
+        var exprs = context.expressions || (context.expressions=[]);
+        if(!ignoreSelf){
+            var attrs = element.attributes;
+            var ignoreChildren = false;
+            for(var i=0,j=attrs.length;i<j;i++){
+                var attr = attrs[i];
+                var attrname = attr.name;
+                var attrvalue =  attr.value;
+                if(attrname[0]!='y')continue;if(attrname[1]!='-')continue;
+                var binderName = attrname.substr(2);
+                
+                var bindExpr =binderName==="value"
+                    ? getValueBinderExpression(element,attrvalue,context)
+                    : BinderExpression.parse(binderName,attrvalue,context);
+                exprs.push(bindExpr);
+                if(context.ignoreChildren) ignoreChildren= true;
+            }
+            if(ignoreChildren)return;
+        }
+        
+        var childNodes = element.childNodes;
+        for(var i=0,j=childNodes.length;i<j;i++){
+            var child = childNodes[i];
+            var childBegin = new ChildBeginExpression(i,element,context);
+            exprs.push(childBegin);
+            parseElement(context);
+            var lastExpr = exprs.pop();
+            if(lastExpr!=childBegin){
+                exprs.push(lastExpr);
+                var childEnd = new ChildEndExpression(i,element,context);
+                exprs.push(childEnd);
+            }else{
+                context.element = element;
+            }
+        }
+    }
+
+    /////////////////////////////
+    /// Binders
+    export function makeBinder(context:BindContext,ignoreSelf?:boolean){
+        parseElement(context,ignoreSelf);
+        let exprs : Array<BindExpression> = context.expressions;
+        if(exprs.length>0)while(true){
+            let expr: BindExpression= exprs.pop();
+            if(!(expr instanceof ChildExpression)){exprs.push(expr);break;}
+        }
+        var expr,codes="///"+(ignoreSelf?ignoreSelf:"") + "\r\nthis.element = $element;this.observable = $observable;\r\n";
+        while(expr=exprs.shift()){
+            codes += expr.toCode();
+        }
+        return new Function("$element","$observable",codes);
+    }
+
+    export let binders :{[index:string]:Function}={};
+
+    binders.scope = function(element,observable){
+        let binder:Function = observable["@y.binder.scope"];
+        if(!binder){
+            let ob:IObservable = this.observable;this.observable = observable;this.element = element;
+            let exprs:Array<BindExpression> = this.expressions;this.expressions = [];
+            binder = observable["@y.binder.scope"] = makeBinder(this,true);
+            this.observable = ob;this.element = element;this.expressions=exprs;
+            
+        }
+        binder(element,observable);
+    }
+
+    binders.each = function(element,observable){
+        let binder:Function = observable["@y.binder.each"];
+        let templateNode:HTMLElement;
+        let context:BindContext = this as BindContext;
+        if(!binder){
+            let tmpNode:HTMLElement = cloneNode(element);
+            templateNode =  cloneNode(tmpNode);
+            let itemTemplate:IObservable = observable(0,[],undefined,observable);
+            let ob:IObservable = this.observable;this.observable = itemTemplate;this.element = tmpNode;
+            let prevParseOnly:boolean = this.parseOnly; this.parseOnly = true;
+            let exprs:Array<BindExpression> = this.expressions;this.expressions = [];
+            binder = observable["@y.binder.each"] = makeBinder(this,element.getAttribute("y-each"));
+            this.observable = ob;this.element = element;this.expressions=exprs;this.parseOnly = prevParseOnly;
+            binder["@y.binder.templateElement"] = templateNode;
+            observable.asArray(itemTemplate);
+        }else{
+            templateNode = binder["@y.binder.templateElement"];
+        }
+        let valueChange:(evt:ObservableEvent)=>any = (evtArgs:ObservableEvent):any=>{
+            let value:any = evtArgs.value;
+            element.innerHTML = "";
+            let ob :IObservable= context.observable;
+            let el:HTMLElement = context.element;
+            for(let i =0,j=value.length;i<j;i++){
+                let item :IObservable = observable[i];
+                let elem:HTMLElement =context.element =  cloneNode(templateNode);
+                context.observable = item;
+                binder.call(context,elem,item);
+                for(let m=0,n=elem.childNodes.length;m<n;m++){
+                    element.appendChild(elem.firstChild);
+                }
+            }
+            context.observable = ob;
+            context.element = el;
+        }
+        valueChange.call(observable,{value:observable()});
+        observable.subscribe(valueChange);
+        return false;
+    }
+    binders["value-textbox"] = function(element:HTMLInputElement,observable:IObservable){
+        let context:BindContext = this as BindContext;
+        let val:any = observable();
+        if(val===undefined)observable(element.value);
+        else element.value = val;
+        observable.subscribe((e:ObservableEvent)=>{
+            element.value = e.value;
+        });
+        attach(element,"keyup",function(){observable(element.value);});
+        attach(element,"blur",function(){observable(element.value);});
+        
+    }
+    binders["value-select"] = function(element:HTMLSelectElement,observable:IObservable){
+        let context:BindContext = this;
+        let val:any = observable();
+        let opts:NodeListOf<HTMLOptionElement> = element.options;
+        let valuechange:(e:ObservableEvent)=>any = function(e:ObservableEvent):any{
+            let value:any = e.value;
+            let opts:NodeListOf<HTMLOptionElement> = element.options;
+            for(let i=0,j=opts.length;i<j;i++){
+                if(opts[i].value===value) {
+                    opts[i].selected= true;
+                    element.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+        let setElement:(value:string)=>void = (value:string):any=>{
+            if(value===undefined || value===null)value="";else value = value.toString();
+            let opts:NodeListOf<HTMLOptionElement> = element.options;
+            for(let i=0,j=opts.length;i<j;i++){
+                let opt:HTMLOptionElement = opts[i];
+                if(opt.value===value){
+                    opt.selected=true;
+                    element.selectedIndex = i;
+                    break;
+                }
+            }
+        }
+        if(val===undefined){
+            let sIndex:number = element.selectedIndex;
+            if(sIndex==-1)sIndex=0;
+            var opt:HTMLOptionElement = opts[sIndex];
+            let value:string = opt ? opt.value : undefined;
+            observable(value);
+        }else{
+            setElement(val);
+        }
+        
+        observable.subscribe(valuechange);
+        attach(element,"change",(e:ObservableEvent):any=>{
+            setElement(e.value);
+        });
+        
+        
+    }
+    binders["value-check"] = binders["value-radio"] = function(element:HTMLInputElement,observable:IObservable):any{
+        let context:BindContext = this as BindContext;
+        observable(element.checked?element.value:undefined);
+        observable.subscribe((e:ObservableEvent):any=>{
+            if(e.value===element.value){
+                element.checked = true;
+            }else {
+                element.checked = false;
+                element.removeAttribute("checked");
+            }
+        });
+        attach(element,"click",function(){observable(element.checked?element.value:undefined);});
+        attach(element,"blur",function(){observable(element.checked?element.value:undefined);});
+    } 
+    binders["value-button"] = function(element:HTMLElement,observable:IObservable){
+        var context = this;
+        observable((element as HTMLInputElement).value);
+        observable.subscribe(function(e){
+            (element as HTMLInputElement).value = e.value;
+        });
+        
+    } 
+    binders["value-text"] = function(element:HTMLElement,observable:IObservable):any{
+        let context:BindContext = this;
+        let val = observable();
+        if(val===undefined)observable((element as HTMLInputElement).value);
+        else (element as HTMLInputElement).value = val;
+        observable.subscribe((e:ObservableEvent):any=>{
+            (element as HTMLInputElement).value = e.value;
+        });
+    }
+    binders["text"]= function(element:HTMLElement,observable:IObservable){
+        let context:BindContext = this;
+        let val:any = observable();
+        if(val===undefined)observable(element.innerHTML);
+        else element.innerHTML = val;
+        observable.subscribe((e:ObservableEvent):any=>{
+            element.innerHTML = e.value;
+        });
+    }
+    
+    binders.visible = function(element:HTMLElement,observable:IObservable){
+        let context:BindContext = this;
+        observable(element.style.display==="none"?false:true);
+        observable.subscribe((e:ObservableEvent):any=>{
+            let value:any =e.value;
+            if(value && value!=="0" && value!=="false"){
+                let displayValue:string = element["@y.displayValue"];
+                if(displayValue===undefined)displayValue = element["@y.displayValue"]=getStyle(element,"display");
+                if(displayValue==="none") displayValue= "";
+                element.style.display = displayValue;
+            } else {
+                if(element["@y.displayValue"]===undefined) 
+                    element["@y.displayValue"]= element.style.display || displayValues[element.tagName] || "";
+                element.style.display = "none";
+            }
+        });
+    }
+    binders.readonly = function(element:HTMLElement,observable:IObservable){
+        var context = this;
+        observable((element as any).readonly?true:false);
+        observable.subscribe(function(e){
+            var value = e.value;
+            if(value && value!=="0" && value!=="false"){
+                (element as any).readonly= true;
+                element.setAttribute("readonly","readonly");
+            } else {
+                (element as any).readonly= false;
+                element.removeAttribute("readonly");
+            }
+        });
+    }
+
+    getValueBinderExpression = function(element:HTMLElement,expr:string,context:BindContext){
+        var tagName = element.tagName;
+        
+        if(tagName=="SELECT") {
+            return BinderExpression.parse("value-select",expr,context);
+        }
+        if(tagName=="TEXTAREA") return BinderExpression.parse("value-text",expr,context);
+        if(tagName=="INPUT") {
+            var type = (element as HTMLInputElement).type;
+            
+            if(type==="button" || type==="reset" || type==="submit") return BinderExpression.parse("value-button",expr,context);
+            if(type==="check" ) return BinderExpression.parse("value-check",expr,context);
+            if(type==="radio" ) return BinderExpression.parse("value-radio",expr,context);
+            return BinderExpression.parse("value-textbox",expr,context);
+        }
+        if(tagName=="OPTION") return BinderExpression.parse("value-text",expr,context);
+        return BinderExpression.parse("text",expr,context);
+    }
 }

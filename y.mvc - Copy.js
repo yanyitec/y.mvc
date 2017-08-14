@@ -400,6 +400,7 @@ ns.makeCloner = function(node){
 		}
 	};
 }
+
 if(divContainer.addEventListener){
 	ns.attach = function(element,evtname,handler){element.addEventListener(evtname,handler,false);}
 	ns.detech = function(element,evtname,handler){element.removeEventListener(evtname,handler,false);}
