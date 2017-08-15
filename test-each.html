@@ -7,7 +7,7 @@
   <meta name="Keywords" content="">
   <meta name="Description" content="">
   <title>Document</title>
-  <script type="text/javascript" src="y.mvc.js"></script>
+  <script type="text/javascript" src="js/y.mvc.js"></script>
  </head>
  <body>
 <table id="tb" border="1"><tbody y-each="$.Users">
@@ -21,10 +21,9 @@
 <input type="button" onclick="return getObservableValue()" value="get" />
 <input type="button" onclick="return setObservableValue()" value="set" />
 </div>
-<textarea id="__output" cols="40" rows="40" style="width:500px;height:500px;"></textarea>
+<textarea id="__output" cols="40" rows="40" style="width:500px;height:200px;"></textarea>
 </div>
 <script type="text/javascript">
-<!--
 var ob_instance;
 var getObservableValue=function(){
 	document.getElementById("__output").value = JSON.stringify(ob_instance());
@@ -52,7 +51,6 @@ ob_instance({
 });
 var regx = /#[\\w\\u4e00-\\u9fa5]+#/g;
 var first = document.body.childNodes[0];
-//-->
 </script>
 
  </body>

@@ -22,6 +22,49 @@ var Y;
         return text.replace(/\-(\w)/g, function (all, letter) { return letter.toUpperCase(); });
     }
     Y.camelize = camelize;
+    function format_number(n, format) {
+    }
+    Y.format_number = format_number;
+    function date_str(d) {
+        if (d === undefined)
+            d = new Date();
+        var text = d.getFullYear().toString();
+        var month = d.getMonth();
+        text += (month < 10) ? "-0" : "-";
+        text += month.toString();
+        var day = d.getDate();
+        text += (day < 10) ? "-0" : "-";
+        text += day.toString();
+        var hour = d.getHours();
+        text += (hour < 10) ? " 0" : " ";
+        text += hour.toString();
+        var minute = d.getMinutes();
+        text += (minute < 10) ? ":0" : ":";
+        text += minute.toString();
+        var second = d.getSeconds();
+        text += (second < 10) ? ":0" : ":";
+        text += second.toString();
+        var ms = d.getMilliseconds();
+        if (ms < 10)
+            text += ".00";
+        else if (ms < 100)
+            text += ".0";
+        else
+            text += ".";
+        text += ms.toString();
+        return text;
+    }
+    Y.date_str = date_str;
+    var idSeed = 0;
+    var idTime = date_str() + "_";
+    function genId() {
+        if (++idSeed === 2100000000) {
+            idSeed = 0;
+            idTime = date_str() + "_";
+        }
+        return idTime + idSeed.toString();
+    }
+    Y.genId = genId;
     /**
      * 去掉前后空格的正则对象
      */
@@ -82,6 +125,19 @@ var Y;
     }());
     Y.ObservableEvent = ObservableEvent;
     /**
+     * Observable发送改变通知时，传递给监听函数的事件对象
+     * @class
+     */
+    var ObservableComputedArgs = (function () {
+        function ObservableComputedArgs(func, deps) {
+            this.func = func;
+            this.deps = deps;
+        }
+        return ObservableComputedArgs;
+    }());
+    Y.ObservableComputedArgs = ObservableComputedArgs;
+    var computedPlaceholdValue = {};
+    /**
     * 创建一个IObservable对象
     * @method
     * @param {string|number} field - 数据域的名称
@@ -93,62 +149,94 @@ var Y;
     function observable(field, object, opts, superior) {
         // 事件
         var changeHandlers;
+        var disposeHanders;
         // 格式化
         var formatter;
         // 域名
         field = field === undefined || field === null ? "" : field;
         // 对象
         object = object || {};
-        var ob = function (newValue, srcEvt) {
-            var self = ob;
-            var oldValue = object[field];
-            if (newValue === undefined)
-                return formatter ? formatter(oldValue) : oldValue;
-            if (oldValue === newValue)
-                return self;
-            if (!newValue) {
-                if (self.is_Array) {
-                    newValue = [];
+        var computeFunc;
+        var newComputedValue = computedPlaceholdValue;
+        var ob;
+        var isComputed = object instanceof ObservableComputedArgs;
+        var computedEventHandler;
+        if (isComputed) {
+            var computedValue_1 = computedPlaceholdValue;
+            var deps_1 = object.deps;
+            ob = function (newValue, srcEvt) {
+                if (computedValue_1 === computedPlaceholdValue) {
+                    computedValue_1 = object.func.apply(ob, deps_1);
                 }
-                else if (self.is_Object) {
-                    newValue = {};
-                }
+                return computedValue_1;
+            };
+            computedEventHandler = function (evt) {
+                var newComputedValue = object.apply(ob, opts);
+                if (newComputedValue === computedValue_1)
+                    return;
+                var computedEvt = new ObservableEvent(ob, "value_change", undefined, field, newComputedValue, computedValue_1, evt);
+                computedValue_1 = newComputedValue;
+                computedEvt.bubble = false;
+                ob.notify(computedEvt);
+            };
+            for (var i = 0, j = deps_1.length; i < j; i++) {
+                deps_1[i].subscribe(computedEventHandler);
             }
-            var evt = srcEvt === false ? null : new ObservableEvent(self, "value_change", object, field, newValue, oldValue, srcEvt);
-            if (self.is_Array) {
-                //只通知子observable
-                self.clear(evt, oldValue);
-                var itemTemplate = self.ob_itemTemplate();
-                for (var i = 0, j = newValue.length; i < j; i++) {
-                    self[i] = itemTemplate.clone(i, newValue, self);
-                }
-            }
-            object[field] = newValue;
-            ///#DEBUG_BEGIN
-            ob["@y.ob.value"] = newValue;
-            ///#DEBUG_END
-            if (evt)
-                self.notify(evt);
-            //处理property
-            if (self.is_Object) {
-                for (var n in newValue) {
-                    var prop = self[reservedPropnames[n] || n];
-                    if (prop && prop.is_Observable) {
-                        prop.ob_object(newValue, evt);
-                        evt.propagate = true;
+            ob.is_Computed = true;
+        }
+        else
+            ob = function (newValue, srcEvt) {
+                var self = ob;
+                var oldValue = object[field];
+                if (newValue === undefined)
+                    return formatter ? formatter(oldValue) : oldValue;
+                if (oldValue === newValue)
+                    return self;
+                if (!newValue) {
+                    if (self.is_Array) {
+                        newValue = [];
+                    }
+                    else if (self.is_Object) {
+                        newValue = {};
                     }
                 }
-            }
-            if (evt && superior && evt.bubble !== false && !evt.stop) {
-                superior.bubble_up(evt);
-            }
-            return self;
-        };
+                var evt = srcEvt === false ? null : new ObservableEvent(self, "value_change", object, field, newValue, oldValue, srcEvt);
+                if (self.is_Array) {
+                    //只通知子observable
+                    self.clear(evt, oldValue);
+                    var itemTemplate = self.ob_itemTemplate();
+                    for (var i = 0, j = newValue.length; i < j; i++) {
+                        self[i] = itemTemplate.clone(i, newValue, self);
+                    }
+                }
+                object[field] = newValue;
+                ///#DEBUG_BEGIN
+                ob["@y.ob.value"] = newValue;
+                ///#DEBUG_END
+                if (evt)
+                    self.notify(evt);
+                //处理property
+                if (self.is_Object) {
+                    for (var n in newValue) {
+                        var prop = self[reservedPropnames[n] || n];
+                        if (prop && prop.is_Observable && prop.ob_object) {
+                            prop.ob_object(newValue, evt);
+                            evt.propagate = true;
+                        }
+                    }
+                }
+                if (evt && superior && evt.bubble !== false && !evt.stop) {
+                    superior.bubble_up(evt);
+                }
+                return self;
+            };
+        for (var n in exts)
+            ob[n] = exts[n];
         ob.is_Observable = true;
         ///#DEBUG_BEGIN
         ob["@y.ob.object"] = object;
         ob["@y.ob.field"] = field;
-        ob["@y.ob.parent"] = parent;
+        ob["@y.ob.superior"] = superior;
         ob["@y.ob.value"] = object[field];
         ///#DEBUG_END
         ob.is_Observable = true;
@@ -170,73 +258,79 @@ var Y;
                 return superior.ob_root();
             return ob;
         };
-        ob.ob_prop = function (pname, opts) {
-            var self = ob;
-            self.is_Object = true;
-            var _pname = reservedPropnames[pname] || pname;
-            var prop = self[_pname];
-            if (!prop) {
-                var value = object[field] || (object[field] = {});
-                prop = self[_pname] = observable(pname, value, opts, self);
-            }
-            else if (opts) {
-                prop.ob_opts(opts);
-            }
-            return prop;
-        };
+        if (!isComputed)
+            ob.ob_prop = function (pname, opts) {
+                var self = ob;
+                self.is_Object = true;
+                var _pname = reservedPropnames[pname] || pname;
+                var prop = self[_pname];
+                if (!prop) {
+                    var value = object[field] || (object[field] = {});
+                    prop = self[_pname] = observable(pname, value, opts, self);
+                }
+                else if (opts) {
+                    prop.ob_opts(opts);
+                }
+                return prop;
+            };
         // 
-        ob.ob_object = function (newObject, srcEvt) {
-            var obj = object;
-            if (newObject === undefined)
-                return object;
-            if (newObject === object)
-                return ob;
-            var self = ob, pname = field;
-            var newValue = newObject[pname];
-            var oldValue = object[pname];
-            if (newValue === oldValue)
-                return self;
-            if (!newValue) {
-                if (self.is_Array) {
-                    newValue = obj[pname] = [];
-                }
-                else if (self.is_Object) {
-                    newValue = obj[pname] = {};
-                }
-            }
-            var evt;
-            if (srcEvt !== false) {
-                evt = new ObservableEvent(self, "object_change", obj, pname, newValue, oldValue, srcEvt);
-            }
-            if (self.is_Array) {
-                //清洗掉原来的，但不通知自己，因为后面会发送一次object_change通知
-                self.clear(evt, oldValue);
-                var itemTemplate = self.ob_itemTemplate();
-                for (var i = 0, j = newValue.length; i < j; i++) {
-                    self[i] = itemTemplate.clone(i, newValue, self);
-                }
-            }
-            object = newObject;
-            ///#DEBUG_BEGIN
-            ob["@y.ob.object"] = object;
-            ob["@y.ob.value"] = newValue;
-            ///#DEBUG_END
-            if (evt)
-                ob.notify(evt);
-            if (self.is_Object) {
-                for (var n in self) {
-                    var prop = self[reservedPropnames[n] || n];
-                    if (prop && prop.is_Observable) {
-                        prop.ob_object(newValue, evt);
-                        evt.propagate = true;
+        if (!isComputed)
+            ob.ob_object = function (newObject, srcEvt) {
+                var obj = object;
+                if (newObject === undefined)
+                    return object;
+                if (newObject === object)
+                    return ob;
+                var self = ob, pname = field;
+                var newValue = newObject[pname];
+                var oldValue = object[pname];
+                if (newValue === oldValue)
+                    return self;
+                if (!newValue) {
+                    if (self.is_Array) {
+                        newValue = obj[pname] = [];
+                    }
+                    else if (self.is_Object) {
+                        newValue = obj[pname] = {};
                     }
                 }
-            }
-            return ob;
-        };
+                var evt;
+                if (srcEvt !== false) {
+                    evt = new ObservableEvent(self, "object_change", obj, pname, newValue, oldValue, srcEvt);
+                }
+                if (self.is_Array) {
+                    //清洗掉原来的，但不通知自己，因为后面会发送一次object_change通知
+                    self.clear(evt, oldValue);
+                    var itemTemplate = self.ob_itemTemplate();
+                    for (var i = 0, j = newValue.length; i < j; i++) {
+                        self[i] = itemTemplate.clone(i, newValue, self);
+                    }
+                }
+                object = newObject;
+                ///#DEBUG_BEGIN
+                ob["@y.ob.object"] = object;
+                ob["@y.ob.value"] = newValue;
+                ///#DEBUG_END
+                if (evt)
+                    ob.notify(evt);
+                if (self.is_Object) {
+                    for (var n in self) {
+                        var prop = self[reservedPropnames[n] || n];
+                        if (prop && prop.is_Observable && prop.ob_object) {
+                            prop.ob_object(newValue, evt);
+                            evt.propagate = true;
+                        }
+                    }
+                }
+                return ob;
+            };
         ob.ob_field = function (newPropname, srcEvt) {
             if (newPropname === undefined)
                 return field;
+            if (isComputed) {
+                field = newPropname;
+                return ob;
+            }
             var newValue = object[newPropname];
             field = newPropname;
             ob.ob_object(newValue, srcEvt);
@@ -289,12 +383,13 @@ var Y;
             }
             return ob;
         };
-        ob.clone = function (pname, obj, parent) {
+        ob.clone = function (pname, obj, superior) {
             pname || (pname = field);
             var self = ob;
-            var clone = observable(pname, obj, opts, parent || self.ob_superior());
+            var clone = observable(pname, obj, opts, superior || self.ob_superior());
             clone.is_Object = self.is_Object;
             clone.is_Array = self.is_Array;
+            clone.is_Computed = self.is_Computed;
             if (self.is_Array) {
                 clone.asArray(self.ob_itemTemplate());
                 return clone;
@@ -312,124 +407,167 @@ var Y;
             }
             return clone;
         };
-        ob.asArray = function (itemTemplate) {
-            var self = ob;
-            self.is_Array = true;
-            //self.is_Object = false;
-            itemTemplate || (itemTemplate = observable("0", [], undefined, self));
-            ///#DEBUG_BEGIN
-            ob["@y.ob.itemTemplate"] = itemTemplate;
-            ///#DEBUG_END
-            var arr = object[field] || (object[field] = []);
-            for (var i = 0, j = arr.length; i < j; i++) {
-                self[i] = itemTemplate.clone(i, arr, self);
-            }
-            self.ob_itemTemplate = function () { return itemTemplate; };
-            self.ob_count = function () { return object[field].length; };
-            self.push = function (itemValue) {
-                var arr = object[field];
-                var index = arr.length;
-                arr.push(itemValue);
-                var item = self[index] = itemTemplate.clone(index, arr, self);
-                var evt = new ObservableEvent(self, "add_item", object, field, arr);
-                evt.index = index;
-                self.notify(evt);
-                return item;
-            };
-            self.pop = function () {
-                var arr = object[field];
-                var index = arr.length - 1;
-                if (index < 0)
-                    return;
-                var itemValue = arr.pop();
-                var item = self[index];
-                delete self[index];
-                var itemEvt = new ObservableEvent(item, "remove", arr, index, itemValue);
-                item.notify(itemEvt);
-                if (itemEvt.bubble !== false && !itemEvt.stop) {
-                    var evt = new ObservableEvent(self, "remove_item", object, field, arr);
+        if (!isComputed)
+            ob.asArray = function (itemTemplate) {
+                var self = ob;
+                self.is_Array = true;
+                //self.is_Object = false;
+                itemTemplate || (itemTemplate = observable("0", [], undefined, self));
+                ///#DEBUG_BEGIN
+                ob["@y.ob.itemTemplate"] = itemTemplate;
+                ///#DEBUG_END
+                var arr = object[field] || (object[field] = []);
+                for (var i = 0, j = arr.length; i < j; i++) {
+                    self[i] = itemTemplate.clone(i, arr, self);
+                }
+                self.ob_itemTemplate = function () { return itemTemplate; };
+                self.ob_count = function () { return object[field].length; };
+                self.push = function (itemValue) {
+                    var arr = object[field];
+                    var index = arr.length;
+                    arr.push(itemValue);
+                    var item = self[index] = itemTemplate.clone(index, arr, self);
+                    var evt = new ObservableEvent(self, "add_item", object, field, arr);
                     evt.index = index;
-                    evt.itemValue = itemValue;
                     self.notify(evt);
-                    if (evt.bubble !== false && !evt.stop)
-                        self.bubble_up(evt);
-                }
-                return itemValue;
-            };
-            //添加第一个
-            self.unshift = function (itemValue) {
-                var me = self;
-                var arr = object[field];
-                var index = arr.length;
-                arr.unshift(itemValue);
-                for (var i = arr.length, j = 0; i >= j; i--) {
-                    var item_1 = me[i] = me[i - 1];
-                    item_1.ob_field(i, false);
-                }
-                var item = self[0] = itemTemplate.clone(0, arr, self);
-                var evt = new ObservableEvent(self, "add_item", object, field, arr);
-                evt.index = index;
-                self.notify(evt);
-                return item;
-            };
-            self.shift = function () {
-                var me = self;
-                var arr = object[field];
-                var count = arr.length - 1;
-                if (count < 0)
-                    return;
-                var itemValue = arr.shift();
-                var item = self[0];
-                for (var i = 1, j = count; i <= j; i++) {
-                    var item_2 = me[i - 1] = me[i];
-                    item_2.ob_field(i, false);
-                }
-                delete self[count];
-                var itemEvt = new ObservableEvent(item, "remove", arr, 0, itemValue);
-                item.notify(itemEvt);
-                if (itemEvt.bubble !== false && !itemEvt.stop) {
-                    var evt = new ObservableEvent(self, "remove_item", object, field, arr);
-                    evt.index = 0;
-                    evt.itemValue = itemValue;
-                    self.notify(evt);
-                    if (evt.bubble !== false && !evt.stop)
-                        self.bubble_up(evt);
-                }
-                return itemValue;
-            };
-            self.clear = function (srcEvt, oldValue) {
-                var arr = oldValue || object[field];
-                var me = self;
-                var count = arr.length;
-                var rplc = [];
-                var stop = false;
-                var bubble_up = true;
-                for (var i = 0; i < count; i++) {
-                    var itemValue = arr.shift();
-                    var item = me[i];
-                    delete me[i];
-                    //evtArgs.index = i;
-                    if (srcEvt !== false && stop) {
-                        var itemEvt = srcEvt === false ? null : new ObservableEvent(self, "remove", arr, i, itemValue, itemValue, srcEvt);
-                        item.notify(itemEvt);
-                        if (itemEvt.stop)
-                            stop = true;
-                        if (itemEvt.bubble === false)
-                            bubble_up = false;
+                    return item;
+                };
+                self.pop = function () {
+                    var arr = object[field];
+                    var index = arr.length - 1;
+                    if (index < 0)
+                        return;
+                    var itemValue = arr.pop();
+                    var item = self[index];
+                    delete self[index];
+                    var itemEvt = new ObservableEvent(item, "remove", arr, index, itemValue);
+                    item.notify(itemEvt);
+                    if (itemEvt.bubble !== false && !itemEvt.stop) {
+                        var evt = new ObservableEvent(self, "remove_item", object, field, arr);
+                        evt.index = index;
+                        evt.itemValue = itemValue;
+                        self.notify(evt);
+                        if (evt.bubble !== false && !evt.stop)
+                            self.bubble_up(evt);
                     }
-                    rplc.push(itemValue);
-                }
-                if (oldValue === undefined && srcEvt !== false && bubble_up && !stop) {
-                    var evt = new ObservableEvent(self, "clear", object, field, arr, rplc, srcEvt);
+                    return itemValue;
+                };
+                //添加第一个
+                self.unshift = function (itemValue) {
+                    var me = self;
+                    var arr = object[field];
+                    var index = arr.length;
+                    arr.unshift(itemValue);
+                    for (var i = arr.length, j = 0; i >= j; i--) {
+                        var item_1 = me[i] = me[i - 1];
+                        item_1.ob_field(i, false);
+                    }
+                    var item = self[0] = itemTemplate.clone(0, arr, self);
+                    var evt = new ObservableEvent(self, "add_item", object, field, arr);
+                    evt.index = index;
                     self.notify(evt);
-                }
-                return self;
+                    return item;
+                };
+                self.shift = function () {
+                    var me = self;
+                    var arr = object[field];
+                    var count = arr.length - 1;
+                    if (count < 0)
+                        return;
+                    var itemValue = arr.shift();
+                    var item = self[0];
+                    for (var i = 1, j = count; i <= j; i++) {
+                        var item_2 = me[i - 1] = me[i];
+                        item_2.ob_field(i, false);
+                    }
+                    delete self[count];
+                    var itemEvt = new ObservableEvent(item, "remove", arr, 0, itemValue);
+                    item.notify(itemEvt);
+                    if (itemEvt.bubble !== false && !itemEvt.stop) {
+                        var evt = new ObservableEvent(self, "remove_item", object, field, arr);
+                        evt.index = 0;
+                        evt.itemValue = itemValue;
+                        self.notify(evt);
+                        if (evt.bubble !== false && !evt.stop)
+                            self.bubble_up(evt);
+                    }
+                    return itemValue;
+                };
+                self.clear = function (srcEvt, oldValue) {
+                    var arr = oldValue || object[field];
+                    var me = self;
+                    var count = arr.length;
+                    var rplc = [];
+                    var stop = false;
+                    var bubble_up = true;
+                    for (var i = 0; i < count; i++) {
+                        var itemValue = arr.shift();
+                        var item = me[i];
+                        delete me[i];
+                        //evtArgs.index = i;
+                        if (srcEvt !== false && stop) {
+                            var itemEvt = srcEvt === false ? null : new ObservableEvent(self, "remove", arr, i, itemValue, itemValue, srcEvt);
+                            item.notify(itemEvt);
+                            if (itemEvt.stop)
+                                stop = true;
+                            if (itemEvt.bubble === false)
+                                bubble_up = false;
+                        }
+                        rplc.push(itemValue);
+                    }
+                    if (oldValue === undefined && srcEvt !== false && bubble_up && !stop) {
+                        var evt = new ObservableEvent(self, "clear", object, field, arr, rplc, srcEvt);
+                        self.notify(evt);
+                    }
+                    return self;
+                };
+                return itemTemplate;
             };
-            return itemTemplate;
+        if (!isComputed)
+            ob.set_computed = function (pname, deps, func) {
+                var self = ob;
+                self.is_Object = true;
+                var _pname = reservedPropnames[pname] || pname;
+                var prop = self[_pname];
+                if (!prop)
+                    throw "field[" + pname + "] already existed.";
+                prop = self[_pname] = observable(pname, new ObservableComputedArgs(func, deps));
+                return prop;
+            };
+        ob.dispose = function (handler) {
+            var self = ob;
+            if (handler !== undefined) {
+                disposeHanders || (disposeHanders = []);
+                disposeHanders.push(handler);
+                return ob;
+            }
+            if (disposeHanders) {
+                for (var i = 0, j = changeHandlers.length; i < j; i++) {
+                    changeHandlers[i].call(self, self);
+                }
+                disposeHanders = undefined;
+            }
+            if (changeHandlers) {
+                for (var i = 0, j = changeHandlers.length; i < j; i++) {
+                    var handler_1 = changeHandlers.shift();
+                    if (handler_1.dispose)
+                        handler_1.dispose(self);
+                }
+                changeHandlers = undefined;
+            }
         };
+        if (isComputed) {
+            ob.dispose(function (sender) {
+                var deps = object.deps;
+                for (var i = 0, j = deps.length; i < j; i++) {
+                    deps[i].unsubscribe(computedEventHandler);
+                }
+            });
+        }
         return ob;
     }
     Y.observable = observable;
+    var exts = observable.exts = {};
     ///////////////////////////////////////////////////////////////
     /// DOM
     ////////////////////////////////////////////////////////////////
@@ -570,10 +708,12 @@ var Y;
     /// Expression
     var propReg = "[\\w\\u4e00-\\u9fa5]+";
     var pathReg = propReg + "(?:\\s*.\\s*" + propReg + ")*";
+    Y.binders = {};
     var BindContext = (function () {
         function BindContext(element, ob_instance, controller) {
             this.element = element;
             this.observable = ob_instance || observable();
+            controller || (controller = {});
             if (controller.TEXT)
                 this.text = function (key, isLazy) { return controller.TEXT(key, isLazy); };
             else {
@@ -589,6 +729,7 @@ var Y;
                     return key;
                 };
             }
+            this.binders = Y.binders;
             //this.binders = ns.binders;
             //this.label = function(key,lazy){
             //    return lazy ?{toString:function(){return key}}:key;
@@ -612,7 +753,7 @@ var Y;
         ValueExpression.parse = function (exprText, context) {
             var expr = ObservableExpression.parse(exprText, context);
             if (expr == null)
-                expr = TextExpression.parse(exprText, context);
+                expr = LabelExpression.parse(exprText, context);
             if (expr == null)
                 expr = new ConstantExpression(exprText, context);
             return expr;
@@ -625,7 +766,15 @@ var Y;
         __extends(ObservableExpression, _super);
         function ObservableExpression(path, context) {
             var _this = _super.call(this) || this;
-            _this.path = path;
+            var rs = ObservableExpression.makePath(path, context);
+            _this.path = rs.path;
+            _this.observable = rs.observable;
+            return _this;
+        }
+        ObservableExpression.prototype.getValue = function (context) { return this.observable; };
+        ObservableExpression.prototype.toCode = function () { return this.path; };
+        ObservableExpression.makePath = function (path, context) {
+            var result = {};
             var paths = path.split(".");
             var innerPaths = ["this.observable"];
             var observable = context.observable;
@@ -643,18 +792,15 @@ var Y;
                 }
                 if (pathname == "$parent") {
                     observable = observable.ob_superior();
-                    innerPaths = ["this.observable.ob_parent()"];
+                    innerPaths = ["this.observable.ob_superior()"];
                     continue;
                 }
                 observable = observable.ob_prop(pathname);
                 innerPaths.push(pathname);
             }
-            _this.path = innerPaths.join(".");
-            _this.observable = observable;
-            return _this;
-        }
-        ObservableExpression.prototype.getValue = function (context) { return this.observable; };
-        ObservableExpression.prototype.toCode = function () { return this.path; };
+            path = innerPaths.join(".");
+            return { path: path, observable: observable };
+        };
         ObservableExpression.parse = function (exprText, context) {
             if (ObservableExpression.regx.test(exprText))
                 return new ObservableExpression(exprText, context);
@@ -664,25 +810,25 @@ var Y;
         return ObservableExpression;
     }(ValueExpression));
     expressions["Observable"] = ObservableExpression;
-    var TextExpression = (function (_super) {
-        __extends(TextExpression, _super);
-        function TextExpression(key, context) {
+    var LabelExpression = (function (_super) {
+        __extends(LabelExpression, _super);
+        function LabelExpression(key, context) {
             var _this = _super.call(this) || this;
             _this.key = key;
             return _this;
         }
-        TextExpression.prototype.toCode = function () { return "this.text(\"" + this.key + "\"," + (this.lazy ? "true" : "false") + ")"; };
-        TextExpression.prototype.getValue = function (context) { return context.text(this.key); };
-        TextExpression.parse = function (exprText, context) {
-            var match = exprText.match(TextExpression.regx);
+        LabelExpression.prototype.toCode = function () { return "this.text(\"" + this.key + "\"," + (this.lazy ? "true" : "false") + ")"; };
+        LabelExpression.prototype.getValue = function (context) { return context.text(this.key); };
+        LabelExpression.parse = function (exprText, context) {
+            var match = exprText.match(LabelExpression.regx);
             if (match)
-                return new TextExpression(match[1], context);
+                return new LabelExpression(match[1], context);
         };
-        TextExpression.regText = "^\\s*##(" + pathReg + ")$";
-        TextExpression.regx = new RegExp(TextExpression.regText);
-        return TextExpression;
+        LabelExpression.regText = "^\\s*##(" + pathReg + ")$";
+        LabelExpression.regx = new RegExp(LabelExpression.regText);
+        return LabelExpression;
     }(ValueExpression));
-    expressions.Text = TextExpression;
+    expressions.Label = LabelExpression;
     var ConstantExpression = (function (_super) {
         __extends(ConstantExpression, _super);
         function ConstantExpression(value, context) {
@@ -703,6 +849,54 @@ var Y;
     }(ValueExpression));
     expressions.Constant = ConstantExpression;
     Y.trimQuoteRegx = /(^\s*['"])|(['"]\s*$)/g;
+    var TextExpression = (function (_super) {
+        __extends(TextExpression, _super);
+        function TextExpression(params, context) {
+            var _this = _super.call(this) || this;
+            var codes = [];
+            var deps = [];
+            for (var i = 0, j = params.length; i < j; i++) {
+                var par = params[i];
+                if (par[0] === "$") {
+                    var rs = ObservableExpression.makePath(par, context);
+                    codes.push("arguments[" + deps.length + "]()");
+                    deps.push(rs.observable);
+                }
+                else if (par[0] === "#") {
+                    var key = par.substr(1).replace(/"/g, "\\\"");
+                    codes.push("(this['@y.ob.controller']?this['@y.ob.controller'].TEXT(\"" + key + "\"):\"" + key + "\")");
+                }
+                else {
+                    codes.push('"' + par.replace(/"/g, '\\"') + '"');
+                }
+            }
+            var funcCode = codes.join("\n+") + ";";
+            var observable = context.observable;
+            var pname = _this.computedField = "COMPUTED_" + genId();
+            _this.observable = observable.set_computed(pname, deps, new Function(funcCode));
+            return _this;
+        }
+        TextExpression.prototype.toCode = function () { return "this.observable[\"" + this.computedField + "\"]"; };
+        TextExpression.prototype.getValue = function (context) {
+            return this.observable();
+        };
+        TextExpression.parse = function (text, context) {
+            var regx = TextExpression.regx;
+            var match;
+            var params = [];
+            var at = regx.lastIndex;
+            while (match = regx.exec(text)) {
+                var prev = text.substring(at, match.index - 1);
+                if (prev)
+                    params.push(prev);
+                params.push(match[1] || match[2]);
+                at = regx.lastIndex;
+            }
+            return params.length == 0 ? null : new TextExpression(params, context);
+        };
+        TextExpression.regx = /(?:\{\{(\$[a-z]{0,6}(?:.[\w\u4e00-\u9fa5]+)+)\}\})|(?:(#[\w\u4e00-\u9fa5]+(?:.[\w\u4e00-\u9fa5]+)*)#)/g;
+        return TextExpression;
+    }(ValueExpression));
     var ChildExpression = (function (_super) {
         __extends(ChildExpression, _super);
         function ChildExpression() {
@@ -758,7 +952,7 @@ var Y;
             var binder = context.binders[_this.binderName];
             if (!binder)
                 throw "binder is not found";
-            if (context.parseOnly !== true)
+            if (binder.applyWhenParsing || context.parseOnly !== true)
                 context.ignoreChildren = binder.apply(context, args) === false;
             code += ");\r\n";
             _this._code = code;
@@ -853,8 +1047,6 @@ var Y;
         }
     }
     Y.parseElement = parseElement;
-    /////////////////////////////
-    /// Binders
     function makeBinder(context, ignoreSelf) {
         parseElement(context, ignoreSelf);
         var exprs = context.expressions;
@@ -873,8 +1065,9 @@ var Y;
         return new Function("$element", "$observable", codes);
     }
     Y.makeBinder = makeBinder;
-    Y.binders = {};
-    Y.binders.scope = function (element, observable) {
+    /////////////////////////////
+    /// Binders
+    var scope = Y.binders.scope = function (element, observable) {
         var binder = observable["@y.binder.scope"];
         if (!binder) {
             var ob = this.observable;
@@ -888,15 +1081,17 @@ var Y;
             this.expressions = exprs;
         }
         binder(element, observable);
+        return false;
     };
-    Y.binders.each = function (element, observable) {
+    scope.applyWhenParsing = true;
+    var each = Y.binders.each = function (element, observable) {
         var binder = observable["@y.binder.each"];
         var templateNode;
         var context = this;
         if (!binder) {
             var tmpNode = cloneNode(element);
             templateNode = cloneNode(tmpNode);
-            var itemTemplate = observable(0, [], undefined, observable);
+            var itemTemplate = Y.observable(0, [], undefined, observable);
             var ob = this.observable;
             this.observable = itemTemplate;
             this.element = tmpNode;
@@ -936,6 +1131,7 @@ var Y;
         observable.subscribe(valueChange);
         return false;
     };
+    each.applyWhenParsing = true;
     Y.binders["value-textbox"] = function (element, observable) {
         var context = this;
         var val = observable();

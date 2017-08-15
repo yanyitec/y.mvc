@@ -11,6 +11,28 @@ namespace Y
         // 意思是将 匹配到的 -x 结构的 x 转换为大写的 X (x 这里代表任意字母)
         return text.replace(/\-(\w)/g, function (all, letter) { return letter.toUpperCase(); });
     }
+    export function format_number(n:number,format:string){
+
+    }
+    
+    export function date_str(d?:Date){
+        if(d===undefined) d= new Date();
+        let text:string = d.getFullYear().toString();
+        let month :number = d.getMonth();text +=(month<10)? "-0":"-"; text += month.toString();
+        let day :number = d.getDate();text +=(day<10)? "-0":"-";text += day.toString();
+        let hour:number = d.getHours();text +=(hour<10)? " 0":" ";text += hour.toString();
+        let minute:number = d.getMinutes();text +=(minute<10)? ":0":":";text += minute.toString();
+        let second :number = d.getSeconds(); text +=(second<10)? ":0":":";text += second.toString();
+        let ms :number = d.getMilliseconds();if(ms<10)text += ".00";else if(ms<100) text += ".0"; else text += ".";text += ms.toString();
+        return text;
+    }
+    let idSeed:number = 0;
+    let idTime:string = date_str()+"_";
+    
+    export function genId():string{
+        if(++idSeed===2100000000) {idSeed=0;idTime = date_str() + "_";}
+        return idTime +idSeed.toString();
+    }
 
     /**
      * 去掉前后空格的正则对象
@@ -36,6 +58,7 @@ namespace Y
      */
     export interface IObservableEventHandler{
         (evt:ObservableEvent):any;
+        dispose?:(sender:IObservable)=>void;
     }
     /**
      * Observable发送改变通知时，传递给监听函数的事件对象
@@ -104,6 +127,19 @@ namespace Y
     }
 
     /**
+     * Observable发送改变通知时，传递给监听函数的事件对象
+     * @class 
+     */
+    export class ObservableComputedArgs{
+        func:Function;
+        deps:Array<IObservable>
+        constructor(func:Function,deps:Array<IObservable>){
+            this.func = func;
+            this.deps = deps;
+        }
+    }
+
+    /**
      * 可观察对象
      * 可以用subscribe来添加事件，当其值改变后会发送通知
      * @interface 
@@ -118,6 +154,8 @@ namespace Y
         is_Object?:boolean;
         /** 指示该observable是否是array */
         is_Array?:boolean;
+        /** 指示该observable是否是计算域 */
+        is_Computed?:boolean;
 
         /**
          * 获取/设置 该observable上的额外数据
@@ -146,8 +184,9 @@ namespace Y
         bubble_up?(evt:ObservableEvent):IObservable;
         subscribe?(handler:IObservableEventHandler ):IObservable;
         unsubscribe?(handler:IObservableEventHandler ):IObservable;
-        clone?(field?:string|number,obj?:object,parent?:IObservable):IObservable;
+        clone?(field?:string|number,obj?:object,superior?:IObservable):IObservable;
         asArray?(itemTemplate?:IObservable):IObservable;
+        set_computed?:(pname:string,deps:Array<IObservable>,func:Function)=>IObservable;
 
         ob_itemTemplate?():IObservable;
         ob_count?():number;
@@ -156,9 +195,10 @@ namespace Y
         unshift?(itemValue:any):IObservable;
         shift?():any;
         clear?(srcEvt:ObservableEvent|boolean,oldValue?:any):IObservable;
-
+        dispose?(handler?:(sender:IObservable)=>void):void;
     }
 
+    let computedPlaceholdValue:object= {};
     
     /**
     * 创建一个IObservable对象
@@ -172,16 +212,41 @@ namespace Y
     export function observable(field?:string|number,object?:object,opts?:any,superior?:IObservable):IObservable{
         // 事件
         let changeHandlers:Array<IObservableEventHandler>;
+        let disposeHanders : Array<(sender:IObservable)=>void>;
         // 格式化
         let formatter:(value:any)=>any;
         // 域名
         field = field===undefined || field===null? "":field;
         // 对象
         object = object || {};
-        
 
-        
-        let ob :IObservable = (newValue?:any,srcEvt?:boolean|ObservableEvent):any=>{
+        let computeFunc : Function;
+        let newComputedValue:any = computedPlaceholdValue;
+        let ob :IObservable;
+        let isComputed = object instanceof ObservableComputedArgs;
+        let computedEventHandler:IObservableEventHandler;
+        if(isComputed){
+            let computedValue :any=computedPlaceholdValue;
+            let deps:Array<IObservable> = (object as ObservableComputedArgs).deps;
+            ob =  function(newValue?:any,srcEvt?:boolean|ObservableEvent){  
+                if(computedValue ===computedPlaceholdValue){  
+                    computedValue =  (object as ObservableComputedArgs).func.apply(ob,deps);  
+                }
+                return computedValue;
+            }
+                    
+            computedEventHandler = function(evt:ObservableEvent){
+                let newComputedValue:any =  (object as Function).apply(ob,opts);
+                if(newComputedValue===computedValue)return;
+                let computedEvt :ObservableEvent = new ObservableEvent(ob,"value_change",undefined,field,newComputedValue,computedValue,evt) ;
+                computedValue = newComputedValue;
+                computedEvt.bubble = false;
+                ob.notify(computedEvt);
+            }
+            for(let i=0,j=deps.length;i<j;i++){ deps[i].subscribe(computedEventHandler);  }
+            ob.is_Computed = true;
+            
+        } else ob  = (newValue?:any,srcEvt?:boolean|ObservableEvent):any=>{
             let self:IObservable = ob;
 
             let oldValue:any = object[field];
@@ -214,7 +279,7 @@ namespace Y
             if(self.is_Object){
                 for(let n in newValue){
                     let prop = self[reservedPropnames[n]||n];
-                    if(prop && prop.is_Observable){
+                    if(prop && prop.is_Observable && prop.ob_object){
                         prop.ob_object(newValue,evt);
                         evt.propagate=true;
                     }	
@@ -225,14 +290,15 @@ namespace Y
             }
             return self;
         }
+        for(let n in exts) ob[n] = exts[n];
         ob.is_Observable=true;
 
-          ///#DEBUG_BEGIN
-          ob["@y.ob.object"] = object;
-          ob["@y.ob.field"] = field;
-          ob["@y.ob.parent"] = parent;
-          ob["@y.ob.value"] = object[field];
-          ///#DEBUG_END
+        ///#DEBUG_BEGIN
+        ob["@y.ob.object"] = object;
+        ob["@y.ob.field"] = field;
+        ob["@y.ob.superior"] = superior;
+        ob["@y.ob.value"] = object[field];
+        ///#DEBUG_END
         
         ob.is_Observable = true;
         ob.is_Object = ob.is_Array = false;
@@ -250,7 +316,7 @@ namespace Y
             if(superior)return superior.ob_root();
             return ob;
         };
-        ob.ob_prop = function(pname:string|number,opts?){
+        if(!isComputed)ob.ob_prop = function(pname:string|number,opts?){
             let self:IObservable = ob;
             self.is_Object = true;
             
@@ -266,7 +332,7 @@ namespace Y
         }
         
         // 
-        ob.ob_object = function(newObject:object,srcEvt?:ObservableEvent|boolean){
+        if(!isComputed)ob.ob_object = function(newObject:object,srcEvt?:ObservableEvent|boolean){
             let obj:object = object;
             if(newObject===undefined)return object;
             if(newObject===object)return ob;
@@ -296,16 +362,17 @@ namespace Y
                 }
             }
             object = newObject;
+
             ///#DEBUG_BEGIN
             ob["@y.ob.object"] = object;
             ob["@y.ob.value"] = newValue;
             ///#DEBUG_END
             
             if(evt)ob.notify(evt);
-            if(self.is_Object ){
+            if(self.is_Object){
                 for(let n in self){
                     let prop = self[reservedPropnames[n]||n];
-                    if(prop && prop.is_Observable){
+                    if(prop && prop.is_Observable && prop.ob_object){
                         prop.ob_object(newValue,evt);
                         evt.propagate=true;
                     }
@@ -315,7 +382,7 @@ namespace Y
         }
         ob.ob_field = function(newPropname:string|number,srcEvt?:ObservableEvent|boolean){
             if(newPropname===undefined)return field;
-            
+            if(isComputed){field=newPropname;return ob;}
             let newValue:object = object[newPropname];
             field = newPropname;
             ob.ob_object(newValue,srcEvt);
@@ -366,12 +433,13 @@ namespace Y
             return ob;
         }
 
-        ob.clone = function(pname?:string|number,obj?:object,parent?:IObservable):IObservable{
+        ob.clone = function(pname?:string|number,obj?:object,superior?:IObservable):IObservable{
             pname || (pname = field);
             let self = ob;
-            let clone = observable(pname,obj, opts,parent||self.ob_superior());
+            let clone = observable(pname,obj, opts,superior ||self.ob_superior());
             clone.is_Object = self.is_Object;
             clone.is_Array = self.is_Array;
+            clone.is_Computed = self.is_Computed;
             
             if(self.is_Array){
                 clone.asArray(self.ob_itemTemplate());
@@ -388,7 +456,7 @@ namespace Y
             return clone;
         }
 
-        ob.asArray = function(itemTemplate?:IObservable):IObservable{
+        if(!isComputed)ob.asArray = function(itemTemplate?:IObservable):IObservable{
             let self:IObservable = ob;
             self.is_Array = true;
             //self.is_Object = false;
@@ -500,8 +568,52 @@ namespace Y
             return itemTemplate;
         }
 
+        if(!isComputed)ob.set_computed = function(pname:string,deps:Array<IObservable>,func:Function):IObservable{
+            let self:IObservable = ob;
+            self.is_Object = true;
+            
+            let _pname:string|number = reservedPropnames[pname]||pname;
+            let prop:IObservable = self[_pname];
+            if(!prop) throw "field[" + pname + "] already existed.";
+            prop = self[_pname] = observable(pname,new ObservableComputedArgs(func,deps));
+            
+            return prop;
+        }
+
+        ob.dispose = function(handler?:(sender:IObservable)=>void){
+            let self: IObservable = ob;
+            if(handler!==undefined){
+                disposeHanders || (disposeHanders=[]);
+                disposeHanders.push(handler);
+                return ob;
+            }
+            if(disposeHanders){
+                for(let i=0,j=changeHandlers.length;i<j;i++){
+                    changeHandlers[i].call(self,self);
+                }
+                disposeHanders = undefined;
+            }
+            
+            if(changeHandlers){
+                for(let i=0,j=changeHandlers.length;i<j;i++){
+                    let handler:IObservableEventHandler = changeHandlers.shift();
+                    if(handler.dispose) handler.dispose(self);
+                }
+                changeHandlers = undefined;
+            }
+        }
+        if(isComputed){
+            ob.dispose((sender:IObservable):void=>{
+                let deps :Array<IObservable> = (object as ObservableComputedArgs).deps;
+                for(let i =0,j=deps.length;i<j;i++){
+                    deps[i].unsubscribe(computedEventHandler);
+                }
+            });
+        }
+        
         return ob;
     }
+    let exts:object = (observable as any).exts = {};
     ///////////////////////////////////////////////////////////////
     /// DOM
     ////////////////////////////////////////////////////////////////
@@ -640,6 +752,10 @@ namespace Y
 
     let propReg:string = "[\\w\\u4e00-\\u9fa5]+";
     let pathReg:string = propReg + "(?:\\s*.\\s*" + propReg + ")*";
+    export interface IBinder{
+        applyWhenParsing?:boolean;
+    }
+    export let binders :{[index:string]:Function}={};
     export class BindContext{
         public element:HTMLElement;
         public binders:{[index:string]:Function};
@@ -650,9 +766,10 @@ namespace Y
         public ignoreChildren:boolean;
 
         public expressions:Array<BindExpression>;
-        public constructor(element:HTMLElement,ob_instance:IObservable,controller:any){
+        public constructor(element:HTMLElement,ob_instance:IObservable,controller?:any){
             this.element = element;
             this.observable = ob_instance || observable();
+            controller||(controller={});
             if(controller.TEXT)this.text=(key:string,isLazy?:boolean):string=>controller.TEXT(key,isLazy);
             else {
                 this.text = (key:string,isLazy?:boolean):string=>{
@@ -666,6 +783,7 @@ namespace Y
                     return key;
                 }
             }
+            this.binders = binders;
             //this.binders = ns.binders;
             //this.label = function(key,lazy){
             //    return lazy ?{toString:function(){return key}}:key;
@@ -682,23 +800,27 @@ namespace Y
         abstract getValue(context:BindContext):any;
         static parse(exprText:string,context:BindContext):ValueExpression{
             var expr:ValueExpression = ObservableExpression.parse(exprText,context);
-            if(expr==null) expr = TextExpression.parse(exprText,context);
+            if(expr==null) expr = LabelExpression.parse(exprText,context);
             if(expr==null) expr = new ConstantExpression(exprText,context);
             return expr;
         }
     }
     expressions.ValueExpression = ValueExpression;
-    
-    
-    
-    
+
 
     class ObservableExpression extends ValueExpression{
         path:string;
         observable:IObservable;
         constructor(path:string,context:BindContext){
             super();
-            this.path = path;
+            let rs:any = ObservableExpression.makePath(path,context);
+            this.path = rs.path;
+            this.observable = rs.observable;
+        }
+        getValue(context:BindContext):any{return this.observable;}
+        toCode():string{return this.path;}
+        static makePath(path:string,context:BindContext):object{
+            var result = {};
             var paths = path.split(".");
             var innerPaths = ["this.observable"];
             var observable = context.observable;
@@ -709,15 +831,13 @@ namespace Y
                     observable = context.observable.ob_root();continue;
                 }
                 if(pathname=="$" || pathname=="$self") {innerPaths = ["this.observable"];observable = context.observable;continue;}
-                if(pathname=="$parent") {observable = observable.ob_superior(); innerPaths = ["this.observable.ob_parent()"];continue;}
+                if(pathname=="$parent") {observable = observable.ob_superior(); innerPaths = ["this.observable.ob_superior()"];continue;}
                 observable= observable.ob_prop(pathname);
                 innerPaths.push(pathname);
             }
-            this.path = innerPaths.join(".");
-            this.observable = observable;
+            path = innerPaths.join(".");
+            return {path:path,observable:observable};
         }
-        getValue(context:BindContext):any{return this.observable;}
-        toCode():string{return this.path;}
 
         static regText:string = "^\\s*\\$|\\$self|\\$parent|\\$root\\s*.\\s*" + pathReg + "\\s*$";
         static regx = new RegExp(ObservableExpression.regText);
@@ -727,7 +847,7 @@ namespace Y
     }
     expressions["Observable"] = ObservableExpression;
 
-    class TextExpression extends ValueExpression{
+    class LabelExpression extends ValueExpression{
         key:string;
         lazy:boolean;
         constructor(key:string,context:BindContext){
@@ -737,13 +857,13 @@ namespace Y
         toCode():string{return "this.text(\"" + this.key + "\","+(this.lazy?"true":"false")+")";}
         getValue(context:BindContext){return context.text(this.key);}
         static regText:string = "^\\s*##(" + pathReg + ")$";
-        static regx :RegExp =  new RegExp(TextExpression.regText);
-        static parse(exprText:string ,context:BindContext):TextExpression{
-            var match = exprText.match(TextExpression.regx);
-            if(match) return new TextExpression(match[1],context);
+        static regx :RegExp =  new RegExp(LabelExpression.regText);
+        static parse(exprText:string ,context:BindContext):LabelExpression{
+            var match = exprText.match(LabelExpression.regx);
+            if(match) return new LabelExpression(match[1],context);
         }
     }
-    expressions.Text  = TextExpression;
+    expressions.Label  = LabelExpression;
 
     class ConstantExpression extends ValueExpression{
         value:string;
@@ -762,6 +882,53 @@ namespace Y
     }    
     expressions.Constant = ConstantExpression;
     export let trimQuoteRegx:RegExp = /(^\s*['"])|(['"]\s*$)/g;
+
+    class TextExpression extends ValueExpression{
+        observable:IObservable;
+        computedField:string;
+        constructor(params :Array<string>,context:BindContext){
+            super();
+            let codes:Array<string> = [];
+            let deps:Array<IObservable> = [];
+            for(let i=0,j=params.length;i<j;i++){
+                let par :string = params[i];
+
+                if(par[0]==="$"){
+                    let rs :any = ObservableExpression.makePath(par,context);
+                    codes.push("arguments[" + deps.length + "]()");
+                    deps.push(rs.observable);
+                }else if(par[0]==="#"){
+                    let key :string = par.substr(1).replace(/"/g,"\\\"");
+                    codes.push("(this['@y.ob.controller']?this['@y.ob.controller'].TEXT(\"" +key + "\"):\"" + key + "\")");
+                }else {
+                    codes.push('"' + par.replace(/"/g,'\\"') + '"');
+                }
+            }
+            let funcCode:string = codes.join("\n+") + ";";
+            let observable :IObservable = context.observable;
+            let pname:string = this.computedField = "COMPUTED_" + genId();
+            this.observable = observable.set_computed(pname,deps,new Function(funcCode));
+
+        }
+        toCode():string{return "this.observable[\""+this.computedField + "\"]";}
+        getValue(context:BindContext):any{
+            return this.observable();
+        }
+        static regx:RegExp = /(?:\{\{(\$[a-z]{0,6}(?:.[\w\u4e00-\u9fa5]+)+)\}\})|(?:(#[\w\u4e00-\u9fa5]+(?:.[\w\u4e00-\u9fa5]+)*)#)/g;
+        static parse( text:string,context:BindContext):TextExpression{
+            let regx:RegExp = TextExpression.regx;
+            let match :RegExpExecArray;
+            let params :Array<string> = [];
+            let at = regx.lastIndex;
+            while(match = regx.exec(text)){
+                var prev = text.substring(at,match.index-1);
+                if(prev)params.push(prev);
+                params.push(match[1]||match[2]);
+                at = regx.lastIndex;
+            }
+            return params.length==0?null:new TextExpression(params,context);
+        }
+    }
 
     abstract class ChildExpression extends BindExpression{
 
@@ -813,10 +980,11 @@ namespace Y
                 code += "," + par.toCode();
                 args.push(value);
             }
-            let binder = context.binders[this.binderName];
+            
+            let binder:Function = context.binders[this.binderName];
             if(!binder) 
                 throw "binder is not found";
-            if(context.parseOnly!==true) context.ignoreChildren = binder.apply(context,args)===false;
+            if((binder as IBinder).applyWhenParsing || context.parseOnly!==true) context.ignoreChildren = binder.apply(context,args)===false;
             code += ");\r\n";
             this._code = code;
         }
@@ -905,8 +1073,6 @@ namespace Y
         }
     }
 
-    /////////////////////////////
-    /// Binders
     export function makeBinder(context:BindContext,ignoreSelf?:boolean){
         parseElement(context,ignoreSelf);
         let exprs : Array<BindExpression> = context.expressions;
@@ -920,10 +1086,9 @@ namespace Y
         }
         return new Function("$element","$observable",codes);
     }
-
-    export let binders :{[index:string]:Function}={};
-
-    binders.scope = function(element,observable){
+    /////////////////////////////
+    /// Binders
+    let scope:any = binders.scope = function(element:HTMLElement,observable:IObservable):boolean{
         let binder:Function = observable["@y.binder.scope"];
         if(!binder){
             let ob:IObservable = this.observable;this.observable = observable;this.element = element;
@@ -933,16 +1098,19 @@ namespace Y
             
         }
         binder(element,observable);
+        return false;
     }
+    scope.applyWhenParsing = true;
+    
 
-    binders.each = function(element,observable){
+    let each :any = binders.each = function(element,observable){
         let binder:Function = observable["@y.binder.each"];
         let templateNode:HTMLElement;
         let context:BindContext = this as BindContext;
         if(!binder){
             let tmpNode:HTMLElement = cloneNode(element);
             templateNode =  cloneNode(tmpNode);
-            let itemTemplate:IObservable = observable(0,[],undefined,observable);
+            let itemTemplate:IObservable = Y.observable(0,[],undefined,observable);
             let ob:IObservable = this.observable;this.observable = itemTemplate;this.element = tmpNode;
             let prevParseOnly:boolean = this.parseOnly; this.parseOnly = true;
             let exprs:Array<BindExpression> = this.expressions;this.expressions = [];
@@ -974,6 +1142,8 @@ namespace Y
         observable.subscribe(valueChange);
         return false;
     }
+    each.applyWhenParsing = true;
+
     binders["value-textbox"] = function(element:HTMLInputElement,observable:IObservable){
         let context:BindContext = this as BindContext;
         let val:any = observable();
