@@ -236,7 +236,7 @@ namespace Y
             }
                     
             computedEventHandler = function(evt:ObservableEvent){
-                let newComputedValue:any =  (object as Function).apply(ob,opts);
+                let newComputedValue:any =  (object as ObservableComputedArgs).func.apply(ob,(object as ObservableComputedArgs).deps);
                 if(newComputedValue===computedValue)return;
                 let computedEvt :ObservableEvent = new ObservableEvent(ob,"value_change",undefined,field,newComputedValue,computedValue,evt) ;
                 computedValue = newComputedValue;
@@ -574,7 +574,7 @@ namespace Y
             
             let _pname:string|number = reservedPropnames[pname]||pname;
             let prop:IObservable = self[_pname];
-            if(!prop) throw "field[" + pname + "] already existed.";
+            if(prop) throw "field[" + pname + "] already existed.";
             prop = self[_pname] = observable(pname,new ObservableComputedArgs(func,deps));
             
             return prop;
@@ -886,25 +886,26 @@ namespace Y
     class TextExpression extends ValueExpression{
         observable:IObservable;
         computedField:string;
-        constructor(params :Array<string>,context:BindContext){
+        constructor(params :Array<string|{}>,context:BindContext){
             super();
-            let codes:Array<string> = [];
+            let codes:Array<string> = ["var $_txt='';var $_t = '';\n"];
             let deps:Array<IObservable> = [];
             for(let i=0,j=params.length;i<j;i++){
-                let par :string = params[i];
-
-                if(par[0]==="$"){
-                    let rs :any = ObservableExpression.makePath(par,context);
-                    codes.push("arguments[" + deps.length + "]()");
-                    deps.push(rs.observable);
-                }else if(par[0]==="#"){
-                    let key :string = par.substr(1).replace(/"/g,"\\\"");
-                    codes.push("(this['@y.ob.controller']?this['@y.ob.controller'].TEXT(\"" +key + "\"):\"" + key + "\")");
-                }else {
-                    codes.push('"' + par.replace(/"/g,'\\"') + '"');
+                let par :string|{} = params[i];
+                if(typeof par ==="object"){
+                    if((par as any).token[0]==="$"){
+                        let rs :any = ObservableExpression.makePath((par as any).token,context);
+                        codes.push("$_t=arguments[" + deps.length + "]();if($_t!==undefined&&$_t!==null)$_txt+=$_t;\n");
+                        deps.push(rs.observable);
+                    }else if((par as any).token[0]==="#"){
+                        let key :string = (par as any).token.substr(1).replace(/"/g,"\\\"");
+                        codes.push("$_txt += (this['@y.ob.controller']?this['@y.ob.controller'].TEXT(\"" +key + "\"):\"" + key + "\")\n");
+                    }
+                } else {
+                    codes.push('$_txt +="' + (par as string).replace(/"/g,'\\"') + '";\n');
                 }
             }
-            let funcCode:string = codes.join("\n+") + ";";
+            let funcCode:string =codes.join("") + "return $_txt;\n";
             let observable :IObservable = context.observable;
             let pname:string = this.computedField = "COMPUTED_" + genId();
             this.observable = observable.set_computed(pname,deps,new Function(funcCode));
@@ -912,23 +913,30 @@ namespace Y
         }
         toCode():string{return "this.observable[\""+this.computedField + "\"]";}
         getValue(context:BindContext):any{
-            return this.observable();
+            return this.observable;
         }
         static regx:RegExp = /(?:\{\{(\$[a-z]{0,6}(?:.[\w\u4e00-\u9fa5]+)+)\}\})|(?:(#[\w\u4e00-\u9fa5]+(?:.[\w\u4e00-\u9fa5]+)*)#)/g;
         static parse( text:string,context:BindContext):TextExpression{
             let regx:RegExp = TextExpression.regx;
             let match :RegExpExecArray;
-            let params :Array<string> = [];
+            let params :Array<string|{}> = [];
             let at = regx.lastIndex;
             while(match = regx.exec(text)){
-                var prev = text.substring(at,match.index-1);
+                let prev:string = text.substring(at,match.index);
                 if(prev)params.push(prev);
-                params.push(match[1]||match[2]);
+                let token :string = match[1]||match[2];
+                params.push({token:token});
                 at = regx.lastIndex;
             }
+            if(params.length){
+                let last:string = text.substring(at);
+                if(last)params.push(last);
+            }
+
             return params.length==0?null:new TextExpression(params,context);
         }
     }
+    expressions.Text = TextExpression;
 
     abstract class ChildExpression extends BindExpression{
 
@@ -1032,11 +1040,19 @@ namespace Y
 
     let getValueBinderExpression:Function;
 
-    export  function parseElement(context:BindContext,ignoreSelf?:boolean):Function{
+    export  function parseElement(context:BindContext,ignoreSelf?:boolean):void{
         var element = context.element;
-        if(!element.tagName)return;
-        var observable = context.observable;
         var exprs = context.expressions || (context.expressions=[]);
+        if(!element.tagName){
+            let cp: TextExpression = TextExpression.parse(element.textContent|| element.innerText || "",context);
+            if(cp){
+                let textBinder:BinderExpression = new BinderExpression("text",[cp],context);
+                exprs.push(textBinder);
+            }
+            return;
+        }
+        var observable = context.observable;
+        
         if(!ignoreSelf){
             var attrs = element.attributes;
             var ignoreChildren = false;
@@ -1235,9 +1251,13 @@ namespace Y
         let context:BindContext = this;
         let val:any = observable();
         if(val===undefined)observable(element.innerHTML);
-        else element.innerHTML = val;
+        else{
+            if(element.tagName)element.innerHTML = val;
+            else element.textContent = val;
+        } 
         observable.subscribe((e:ObservableEvent):any=>{
-            element.innerHTML = e.value;
+            if(element.tagName)element.innerHTML = e.value;
+            else element.textContent = e.value;
         });
     }
     

@@ -171,7 +171,7 @@ var Y;
                 return computedValue_1;
             };
             computedEventHandler = function (evt) {
-                var newComputedValue = object.apply(ob, opts);
+                var newComputedValue = object.func.apply(ob, object.deps);
                 if (newComputedValue === computedValue_1)
                     return;
                 var computedEvt = new ObservableEvent(ob, "value_change", undefined, field, newComputedValue, computedValue_1, evt);
@@ -529,7 +529,7 @@ var Y;
                 self.is_Object = true;
                 var _pname = reservedPropnames[pname] || pname;
                 var prop = self[_pname];
-                if (!prop)
+                if (prop)
                     throw "field[" + pname + "] already existed.";
                 prop = self[_pname] = observable(pname, new ObservableComputedArgs(func, deps));
                 return prop;
@@ -853,24 +853,26 @@ var Y;
         __extends(TextExpression, _super);
         function TextExpression(params, context) {
             var _this = _super.call(this) || this;
-            var codes = [];
+            var codes = ["var $_txt='';var $_t = '';\n"];
             var deps = [];
             for (var i = 0, j = params.length; i < j; i++) {
                 var par = params[i];
-                if (par[0] === "$") {
-                    var rs = ObservableExpression.makePath(par, context);
-                    codes.push("arguments[" + deps.length + "]()");
-                    deps.push(rs.observable);
-                }
-                else if (par[0] === "#") {
-                    var key = par.substr(1).replace(/"/g, "\\\"");
-                    codes.push("(this['@y.ob.controller']?this['@y.ob.controller'].TEXT(\"" + key + "\"):\"" + key + "\")");
+                if (typeof par === "object") {
+                    if (par.token[0] === "$") {
+                        var rs = ObservableExpression.makePath(par.token, context);
+                        codes.push("$_t=arguments[" + deps.length + "]();if($_t!==undefined&&$_t!==null)$_txt+=$_t;\n");
+                        deps.push(rs.observable);
+                    }
+                    else if (par.token[0] === "#") {
+                        var key = par.token.substr(1).replace(/"/g, "\\\"");
+                        codes.push("$_txt += (this['@y.ob.controller']?this['@y.ob.controller'].TEXT(\"" + key + "\"):\"" + key + "\")\n");
+                    }
                 }
                 else {
-                    codes.push('"' + par.replace(/"/g, '\\"') + '"');
+                    codes.push('$_txt +="' + par.replace(/"/g, '\\"') + '";\n');
                 }
             }
-            var funcCode = codes.join("\n+") + ";";
+            var funcCode = codes.join("") + "return $_txt;\n";
             var observable = context.observable;
             var pname = _this.computedField = "COMPUTED_" + genId();
             _this.observable = observable.set_computed(pname, deps, new Function(funcCode));
@@ -878,7 +880,7 @@ var Y;
         }
         TextExpression.prototype.toCode = function () { return "this.observable[\"" + this.computedField + "\"]"; };
         TextExpression.prototype.getValue = function (context) {
-            return this.observable();
+            return this.observable;
         };
         TextExpression.parse = function (text, context) {
             var regx = TextExpression.regx;
@@ -886,17 +888,24 @@ var Y;
             var params = [];
             var at = regx.lastIndex;
             while (match = regx.exec(text)) {
-                var prev = text.substring(at, match.index - 1);
+                var prev = text.substring(at, match.index);
                 if (prev)
                     params.push(prev);
-                params.push(match[1] || match[2]);
+                var token = match[1] || match[2];
+                params.push({ token: token });
                 at = regx.lastIndex;
+            }
+            if (params.length) {
+                var last = text.substring(at);
+                if (last)
+                    params.push(last);
             }
             return params.length == 0 ? null : new TextExpression(params, context);
         };
         TextExpression.regx = /(?:\{\{(\$[a-z]{0,6}(?:.[\w\u4e00-\u9fa5]+)+)\}\})|(?:(#[\w\u4e00-\u9fa5]+(?:.[\w\u4e00-\u9fa5]+)*)#)/g;
         return TextExpression;
     }(ValueExpression));
+    expressions.Text = TextExpression;
     var ChildExpression = (function (_super) {
         __extends(ChildExpression, _super);
         function ChildExpression() {
@@ -1003,10 +1012,16 @@ var Y;
     var getValueBinderExpression;
     function parseElement(context, ignoreSelf) {
         var element = context.element;
-        if (!element.tagName)
-            return;
-        var observable = context.observable;
         var exprs = context.expressions || (context.expressions = []);
+        if (!element.tagName) {
+            var cp = TextExpression.parse(element.textContent || element.innerText || "", context);
+            if (cp) {
+                var textBinder = new BinderExpression("text", [cp], context);
+                exprs.push(textBinder);
+            }
+            return;
+        }
+        var observable = context.observable;
         if (!ignoreSelf) {
             var attrs = element.attributes;
             var ignoreChildren = false;
@@ -1229,10 +1244,17 @@ var Y;
         var val = observable();
         if (val === undefined)
             observable(element.innerHTML);
-        else
-            element.innerHTML = val;
+        else {
+            if (element.tagName)
+                element.innerHTML = val;
+            else
+                element.textContent = val;
+        }
         observable.subscribe(function (e) {
-            element.innerHTML = e.value;
+            if (element.tagName)
+                element.innerHTML = e.value;
+            else
+                element.textContent = e.value;
         });
     };
     Y.binders.visible = function (element, observable) {
