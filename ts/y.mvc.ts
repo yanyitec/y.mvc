@@ -11,9 +11,8 @@ namespace Y
         // 意思是将 匹配到的 -x 结构的 x 转换为大写的 X (x 这里代表任意字母)
         return text.replace(/\-(\w)/g, function (all, letter) { return letter.toUpperCase(); });
     }
-    export function format_number(n:number,format:string){
-
-    }
+    export let numberRegx:RegExp = /([+\-]?)(\d{1,3}(?:,?\d{3})*)(.\d+)?/;
+    
     
     export function date_str(d?:Date){
         if(d===undefined) d= new Date();
@@ -139,12 +138,14 @@ namespace Y
         }
     }
 
+    
+
     /**
      * 可观察对象
      * 可以用subscribe来添加事件，当其值改变后会发送通知
      * @interface 
      */
-    export interface IObservable{
+    export interface IObservable {
         (value?:any,srcEvt?:ObservableEvent|boolean):any;
         //[index:number]:IObservable;
 
@@ -252,7 +253,7 @@ namespace Y
             let oldValue:any = object[field];
             if(newValue===undefined) return formatter?formatter(oldValue):oldValue;
             if(oldValue===newValue) return self;
-            if(!newValue){
+            if(typeof newValue!=='object'){
                 if(self.is_Array){
                     newValue=[];
                 } else if(self.is_Object){
@@ -323,7 +324,10 @@ namespace Y
             let _pname:string|number = reservedPropnames[pname]||pname;
             let prop:IObservable = self[_pname];
             if(!prop){
-                let value = object[field] || (object[field]={});
+                let value = object[field];
+                if(typeof value!=="object"){
+                    value = (self.is_Array)?[]:{};
+                }
                 prop = self[_pname] = observable(pname,value ,opts,self);
             }else if(opts){
                 prop.ob_opts(opts);
@@ -341,7 +345,7 @@ namespace Y
             let newValue:any = newObject[pname];
             let oldValue:any = object[pname];
             if(newValue===oldValue) return self;
-            if(!newValue){
+            if(typeof newValue !=='object'){
                 if(self.is_Array){
                     newValue=obj[pname]=[];
                 }else if(self.is_Object){
@@ -764,6 +768,7 @@ namespace Y
 
         public parseOnly:boolean;
         public ignoreChildren:boolean;
+        public controller?:{};
 
         public expressions:Array<BindExpression>;
         public constructor(element:HTMLElement,ob_instance:IObservable,controller?:any){
@@ -1160,13 +1165,17 @@ namespace Y
     }
     each.applyWhenParsing = true;
 
-    binders["value-textbox"] = function(element:HTMLInputElement,observable:IObservable){
+    binders["value-textbox"] = function(element:HTMLInputElement,observable:IObservable,formatName?:string,formatOpt?:string){
         let context:BindContext = this as BindContext;
         let val:any = observable();
+        let format:(value:any,opt?:string)=>string = formaters[formatName];
         if(val===undefined)observable(element.value);
-        else element.value = val;
+        else{
+            
+            element.value = format?format(val,formatOpt):val;
+        } 
         observable.subscribe((e:ObservableEvent)=>{
-            element.value = e.value;
+            element.value = format?format(e.value,formatOpt):e.value;
         });
         attach(element,"keyup",function(){observable(element.value);});
         attach(element,"blur",function(){observable(element.value);});
@@ -1230,42 +1239,50 @@ namespace Y
         attach(element,"click",function(){observable(element.checked?element.value:undefined);});
         attach(element,"blur",function(){observable(element.checked?element.value:undefined);});
     } 
-    binders["value-button"] = function(element:HTMLElement,observable:IObservable){
+    binders["value-button"] = function(element:HTMLElement,observable:IObservable,formatName?:string,formatOpt?:string){
         var context = this;
+        let format:(value:any,opt?:string)=>string = formaters[formatName];
         observable((element as HTMLInputElement).value);
         observable.subscribe(function(e){
-            (element as HTMLInputElement).value = e.value;
+            (element as HTMLInputElement).value = format?format(e.value,formatOpt):e.value;
         });
         
     } 
-    binders["value-text"] = function(element:HTMLElement,observable:IObservable):any{
+    binders["value-text"] = function(element:HTMLElement,observable:IObservable,formatName?:string,formatOpt?:string):any{
         let context:BindContext = this;
         let val = observable();
+        let format:(value:any,opt?:string)=>string = formaters[formatName];
         if(val===undefined)observable((element as HTMLInputElement).value);
-        else (element as HTMLInputElement).value = val;
+        else (element as HTMLInputElement).value = format?format(val,formatOpt):val;
         observable.subscribe((e:ObservableEvent):any=>{
-            (element as HTMLInputElement).value = e.value;
+            (element as HTMLInputElement).value = format?format(e.value,formatOpt):e.value;
         });
     }
-    binders["text"]= function(element:HTMLElement,observable:IObservable){
+    binders["text"]= function(element:HTMLElement,observable:IObservable,formatName?:string,formatOpt?:string){
         let context:BindContext = this;
         let val:any = observable();
-        if(val===undefined)observable(element.innerHTML);
+        let format:(value:any,opt?:string)=>string = formaters[formatName];
+        if(val===undefined)observable(element.tagName?element.textContent:element.innerHTML);
         else{
-            if(element.tagName)element.innerHTML = val;
-            else element.textContent = val;
+            if(element.tagName)element.innerHTML = format?format(val,formatOpt):val;
+            else element.textContent = format?format(val,formatOpt):val;;
         } 
         observable.subscribe((e:ObservableEvent):any=>{
-            if(element.tagName)element.innerHTML = e.value;
-            else element.textContent = e.value;
+            if(element.tagName)element.innerHTML = format?format(e.value,formatOpt):e.value;
+            else element.textContent = format?format(e.value,formatOpt):e.value;
         });
     }
     
     binders.visible = function(element:HTMLElement,observable:IObservable){
         let context:BindContext = this;
-        observable(element.style.display==="none"?false:true);
-        observable.subscribe((e:ObservableEvent):any=>{
-            let value:any =e.value;
+        let val:any = observable();
+        let valuechange = function(e:ObservableEvent){
+            let value:any = e.value;
+            if(typeof value==="object"){
+                let obj:object = value as object;
+                value = false;
+                for(var n in obj) {value=true;break;}
+            }
             if(value && value!=="0" && value!=="false"){
                 let displayValue:string = element["@y.displayValue"];
                 if(displayValue===undefined)displayValue = element["@y.displayValue"]=getStyle(element,"display");
@@ -1276,12 +1293,15 @@ namespace Y
                     element["@y.displayValue"]= element.style.display || displayValues[element.tagName] || "";
                 element.style.display = "none";
             }
-        });
+        }
+        if(val===undefined) observable(element.style.display==="none"?false:true);
+        else valuechange({value:val} as ObservableEvent);
+        
+        observable.subscribe(valuechange);
     }
     binders.readonly = function(element:HTMLElement,observable:IObservable){
-        var context = this;
-        observable((element as any).readonly?true:false);
-        observable.subscribe(function(e){
+        let context:BindContext = this as BindContext;
+        let valuechange = function(e:ObservableEvent){
             var value = e.value;
             if(value && value!=="0" && value!=="false"){
                 (element as any).readonly= true;
@@ -1290,7 +1310,11 @@ namespace Y
                 (element as any).readonly= false;
                 element.removeAttribute("readonly");
             }
-        });
+        }
+        let val :any = observable();
+        if(val===undefined)observable((element as any).readonly?true:false);
+        else valuechange({value:val} as ObservableEvent);
+        observable.subscribe(valuechange);
     }
 
     getValueBinderExpression = function(element:HTMLElement,expr:string,context:BindContext){
@@ -1311,4 +1335,7 @@ namespace Y
         if(tagName=="OPTION") return BinderExpression.parse("value-text",expr,context);
         return BinderExpression.parse("text",expr,context);
     }
+    /////////////////////////////////
+    /// format
+    export let formaters:{[index:string]:(value:any,format_opts?:string)=>string}={};
 }

@@ -22,9 +22,7 @@ var Y;
         return text.replace(/\-(\w)/g, function (all, letter) { return letter.toUpperCase(); });
     }
     Y.camelize = camelize;
-    function format_number(n, format) {
-    }
-    Y.format_number = format_number;
+    Y.numberRegx = /([+\-]?)(\d{1,3}(?:,?\d{3})*)(.\d+)?/;
     function date_str(d) {
         if (d === undefined)
             d = new Date();
@@ -192,7 +190,7 @@ var Y;
                     return formatter ? formatter(oldValue) : oldValue;
                 if (oldValue === newValue)
                     return self;
-                if (!newValue) {
+                if (typeof newValue !== 'object') {
                     if (self.is_Array) {
                         newValue = [];
                     }
@@ -265,7 +263,10 @@ var Y;
                 var _pname = reservedPropnames[pname] || pname;
                 var prop = self[_pname];
                 if (!prop) {
-                    var value = object[field] || (object[field] = {});
+                    var value = object[field];
+                    if (typeof value !== "object") {
+                        value = (self.is_Array) ? [] : {};
+                    }
                     prop = self[_pname] = observable(pname, value, opts, self);
                 }
                 else if (opts) {
@@ -286,7 +287,7 @@ var Y;
                 var oldValue = object[pname];
                 if (newValue === oldValue)
                     return self;
-                if (!newValue) {
+                if (typeof newValue !== 'object') {
                     if (self.is_Array) {
                         newValue = obj[pname] = [];
                     }
@@ -1147,15 +1148,17 @@ var Y;
         return false;
     };
     each.applyWhenParsing = true;
-    Y.binders["value-textbox"] = function (element, observable) {
+    Y.binders["value-textbox"] = function (element, observable, formatName, formatOpt) {
         var context = this;
         var val = observable();
+        var format = Y.formaters[formatName];
         if (val === undefined)
             observable(element.value);
-        else
-            element.value = val;
+        else {
+            element.value = format ? format(val, formatOpt) : val;
+        }
         observable.subscribe(function (e) {
-            element.value = e.value;
+            element.value = format ? format(e.value, formatOpt) : e.value;
         });
         Y.attach(element, "keyup", function () { observable(element.value); });
         Y.attach(element, "blur", function () { observable(element.value); });
@@ -1221,47 +1224,59 @@ var Y;
         Y.attach(element, "click", function () { observable(element.checked ? element.value : undefined); });
         Y.attach(element, "blur", function () { observable(element.checked ? element.value : undefined); });
     };
-    Y.binders["value-button"] = function (element, observable) {
+    Y.binders["value-button"] = function (element, observable, formatName, formatOpt) {
         var context = this;
+        var format = Y.formaters[formatName];
         observable(element.value);
         observable.subscribe(function (e) {
-            element.value = e.value;
+            element.value = format ? format(e.value, formatOpt) : e.value;
         });
     };
-    Y.binders["value-text"] = function (element, observable) {
+    Y.binders["value-text"] = function (element, observable, formatName, formatOpt) {
         var context = this;
         var val = observable();
+        var format = Y.formaters[formatName];
         if (val === undefined)
             observable(element.value);
         else
-            element.value = val;
+            element.value = format ? format(val, formatOpt) : val;
         observable.subscribe(function (e) {
-            element.value = e.value;
+            element.value = format ? format(e.value, formatOpt) : e.value;
         });
     };
-    Y.binders["text"] = function (element, observable) {
+    Y.binders["text"] = function (element, observable, formatName, formatOpt) {
         var context = this;
         var val = observable();
+        var format = Y.formaters[formatName];
         if (val === undefined)
-            observable(element.innerHTML);
+            observable(element.tagName ? element.textContent : element.innerHTML);
         else {
             if (element.tagName)
-                element.innerHTML = val;
+                element.innerHTML = format ? format(val, formatOpt) : val;
             else
-                element.textContent = val;
+                element.textContent = format ? format(val, formatOpt) : val;
+            ;
         }
         observable.subscribe(function (e) {
             if (element.tagName)
-                element.innerHTML = e.value;
+                element.innerHTML = format ? format(e.value, formatOpt) : e.value;
             else
-                element.textContent = e.value;
+                element.textContent = format ? format(e.value, formatOpt) : e.value;
         });
     };
     Y.binders.visible = function (element, observable) {
         var context = this;
-        observable(element.style.display === "none" ? false : true);
-        observable.subscribe(function (e) {
+        var val = observable();
+        var valuechange = function (e) {
             var value = e.value;
+            if (typeof value === "object") {
+                var obj = value;
+                value = false;
+                for (var n in obj) {
+                    value = true;
+                    break;
+                }
+            }
             if (value && value !== "0" && value !== "false") {
                 var displayValue = element["@y.displayValue"];
                 if (displayValue === undefined)
@@ -1275,12 +1290,16 @@ var Y;
                     element["@y.displayValue"] = element.style.display || displayValues[element.tagName] || "";
                 element.style.display = "none";
             }
-        });
+        };
+        if (val === undefined)
+            observable(element.style.display === "none" ? false : true);
+        else
+            valuechange({ value: val });
+        observable.subscribe(valuechange);
     };
     Y.binders.readonly = function (element, observable) {
         var context = this;
-        observable(element.readonly ? true : false);
-        observable.subscribe(function (e) {
+        var valuechange = function (e) {
             var value = e.value;
             if (value && value !== "0" && value !== "false") {
                 element.readonly = true;
@@ -1290,7 +1309,13 @@ var Y;
                 element.readonly = false;
                 element.removeAttribute("readonly");
             }
-        });
+        };
+        var val = observable();
+        if (val === undefined)
+            observable(element.readonly ? true : false);
+        else
+            valuechange({ value: val });
+        observable.subscribe(valuechange);
     };
     getValueBinderExpression = function (element, expr, context) {
         var tagName = element.tagName;
@@ -1313,4 +1338,7 @@ var Y;
             return BinderExpression.parse("value-text", expr, context);
         return BinderExpression.parse("text", expr, context);
     };
+    /////////////////////////////////
+    /// format
+    Y.formaters = {};
 })(Y || (Y = {}));
