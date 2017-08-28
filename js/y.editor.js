@@ -47,6 +47,7 @@ var Y;
                 var sel = this._win.getSelection();
                 if (this._selection) {
                     var range = this._doc.createRange();
+                    //这里应该调用compareBoundaryPoints来比较边界在文档中的顺序
                     range.setStart(this._selection.startNode, this._selection.startIndex);
                     range.setEnd(this._selection.endNode, this._selection.endIndex);
                     console.log(this._selection.startIndex, this._selection.endIndex);

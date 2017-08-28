@@ -182,4 +182,64 @@ var Y;
         return hasIt;
     }
     Y.removeClass = removeClass;
+    var Eventable = (function () {
+        function Eventable() {
+        }
+        Eventable.prototype.subscribe = function (name, handler) {
+            var handlers;
+            if (typeof name === "string") {
+                var events = this.__y_eventable_events || (this.__y_eventable_events = { "@.@": [] });
+                handlers = events[name] || (events[name] = []);
+            }
+            else {
+                handlers = this.__y_eventable_defaults || (this.__y_eventable_defaults = []);
+                handler = name;
+            }
+            handlers.push(handler);
+            return this;
+        };
+        Eventable.prototype.unsubscribe = function (name, handler) {
+            var handlers;
+            if (typeof name === "string") {
+                var events = this.__y_eventable_events;
+                if (!events)
+                    return this;
+                handlers = events[name];
+            }
+            else {
+                handlers = this.__y_eventable_defaults;
+            }
+            if (!handlers || handlers.length == 0)
+                return this;
+            for (var i = 0, j = handlers.length; i < j; i++) {
+                var h = handlers.shift();
+                if (h !== handler)
+                    handlers.push(h);
+            }
+            return this;
+        };
+        Eventable.prototype.notify = function (name, evtArgs) {
+            var handlers;
+            if (evtArgs !== undefined) {
+                var events = this.__y_eventable_events;
+                if (!events)
+                    return this;
+                handlers = events[name];
+            }
+            else {
+                handlers = this.__y_eventable_defaults;
+                evtArgs = name;
+            }
+            if (!handlers || handlers.length == 0)
+                return this;
+            for (var i = 0, j = handlers.length; i < j; i++) {
+                var h = handlers.shift();
+                if (h.call(this, evtArgs) !== false)
+                    handlers.push(h);
+            }
+            return this;
+        };
+        return Eventable;
+    }());
+    Y.Eventable = Eventable;
 })(Y || (Y = {}));

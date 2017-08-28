@@ -175,4 +175,56 @@ namespace Y{
         return hasIt;
     }
 
+    export class Eventable{
+        __y_eventable_defaults?:Array<Function>;
+        __y_eventable_events?:{[index:string]:Array<Function>};
+        constructor(){}
+        subscribe(name:string|Function,handler?:Function):Eventable{
+            let handlers:Array<Function>;
+            if(typeof name==="string"){
+                let events  = this.__y_eventable_events || (this.__y_eventable_events={"@.@":[]});
+                handlers = events[name as string]||(events[name as string]=[]);
+            }else{
+                handlers = this.__y_eventable_defaults||(this.__y_eventable_defaults=[]);
+                handler = name as Function;
+            }
+            handlers.push(handler);
+            return this;
+        }
+        unsubscribe(name:string|Function,handler?:Function):Eventable{
+            let handlers:Array<Function>;
+            if(typeof name==="string"){
+                let events  = this.__y_eventable_events;
+                if(!events)return this;
+                handlers = events[name as string];
+            }else{
+                handlers = this.__y_eventable_defaults;
+            }
+            if(!handlers|| handlers.length==0)return this;
+            for(let i=0,j= handlers.length;i<j;i++){
+                let h = handlers.shift();
+                if(h!==handler) handlers.push(h);
+            }
+            return this;
+        }
+        notify(name:any,evtArgs?:any){
+            let handlers:Array<Function>;
+            if(evtArgs!==undefined){
+                let events  = this.__y_eventable_events;
+                if(!events)return this;
+                handlers = events[name as string];
+            }else{
+                handlers = this.__y_eventable_defaults;
+                evtArgs = name;
+            }
+            if(!handlers|| handlers.length==0)return this;
+            for(let i=0,j= handlers.length;i<j;i++){
+                let h = handlers.shift();
+                if(h.call(this,evtArgs)!==false) handlers.push(h);
+            }
+            return this;
+        }
+
+    }
+
 }
