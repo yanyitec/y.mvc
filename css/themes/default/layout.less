@@ -1,0 +1,78 @@
+//.gen-layout 生成跟veiwport布局相关用的css:.layout,.layout-limited,row,props-row,col-*-n,*-hidden
+//.gen-cols 生成固定布局用的css:cols-n
+
+.gen-layout(
+    @viewport,//视图类型
+    @col-count,//栅栏列数量
+    @max-width,//最大行宽
+    @min-row-width,//最小行宽
+    @margin-vertical,//垂直外补
+    @margin-horizen, //水平外补
+    @font-size
+){
+    .all{
+        font-size:@font-size;
+        color:@fr-color;
+        background-color:@bg-color;
+        border:0;
+        margin:@margin-vertical @margin-horizen;
+        padding:@padding;
+    }
+    *:extend(.all){}
+
+    html:extend(.all),body:extend(.all){}
+
+    //最外层的layout,控制宽度用
+    .container{
+        margin:0;
+        padding:0;
+        width:100%;
+        box-sizing: border-box;   
+        clear:both;
+    }
+    .container-limited:extends(.container){
+        max-width:@max-width;
+    }
+ 
+    .layout{
+        padding:0 ;
+        margin:@margin-vertical 0;
+        width:100%;
+        font-size:0;
+        clear:both;
+        &>*{
+            font-size:@font-size;
+        }
+    }
+    
+    .props-row:extends(.row){
+        min-width:@min-row-width;
+    }
+    .@{viewport}-hidden{
+        display: none;
+    }
+    .gen-viewport-cols(@viewport, @col-count,@i: 1) when (@i <= @col-count) {
+        .@{viewport}-cols-@{i} {
+          width: (@i * 100% / @col-count);
+          display: inline-block;
+          border:0 !important;
+          margin:0 !important;
+          padding:0 !important;
+        }
+        .gen-viewport-cols(@viewport,@col-count, (@i + 1));
+    }
+    .gen-viewport-cols(@viewport,@col-count);
+
+    
+}
+  
+.gen-cols( @col-count,@i: 1) when (@i <= @col-count) {
+    .cols-@{i} {
+        width: (@i * 100% / @col-count);
+        display: inline-block;
+        border:0 !important;
+        margin:0 !important;
+        padding:0 !important;
+    }
+    .gen-cols(@col-count, (@i + 1));
+}

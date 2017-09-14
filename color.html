@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- 上述3个meta标签*必须*放在最前面，任何其他内容都*必须*跟随其后！ -->
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="icon" href="">
+    <style type="css/text">
+ .bar{
+    height: 40px;
+ }   
+ .bar .box{
+     width:40px;
+     text-align: center;
+ }
+    </style>
+    
+  </head>
+
+  <body>
+      <div id="area"></div>
+<script type="text/javascript">
+var colorGroups = {};
+colorGroups["坦桑石"] = ["#000088","#0000FF","#FCFCFF","#8978FF","#5B33FF"];
+colorGroups["蓝宝石"] = ["#001187","#0B3BCF","#EDEFF7","#969FD8","#4479F0"  ];
+colorGroups["Ruby"] = ["#7F0000","#EA002C","#FFFEFE","#F084A1","#FF188F"  ];
+colorGroups["Topaz"] = ["#E47600","#FFD000","#FEFBFA","#F2C78D","#8C4200"  ];
+colorGroups["Emerald"] = ["#017B4A","#00CA76","#F5FAF8","#8BE5B9","#00FFA4"  ];
+colorGroups["Amethyst"] = ["#C134D5","#BE24D5","#F3E8F6","#CE81DB","#7945A2"  ];
+colorGroups["Turquoise"] = ["#146A6A","#00FFFF","#F0F3F3","#8AD3D8","#00A6B4"  ];
+colorGroups["black"] = ["#191A13","#5C5D52","#FEFEFE","#9A9B94","#858477"  ];
+colorGroups["moonstone"] = ["#FEFEFE","#F7F2EC","#E8E5D6","#fcfce3","#d3d6cd"  ];
+var buildColors = function(){
+    var size = 50;
+    var html ="<div>";
+    for(var n in colorGroups){
+        var colors = colorGroups[n];
+        html += "<fieldset style='float:left;border:1px solid block;padding:3px;margin:3px;font-size:12px;width:"+((size+10)*5)+"px;'><legend>" + n + "</legend><div>";
+        for(var i =0,j=colors.length;i<j;i++){
+            var color=colors[i];
+            html += "<div style='float:left;width:"+size+"px;height:"+(size+20)+"px;padding:3px;'>";
+            html += "<div style='border:1px solid "+color+";border-radius:5px;width:"+size+"px;height:"+size+"px;background-color:"+color+"'></div><div style='text-align:center;height:20px;overflow:hidden;'>"+color + "</div>";
+            html += "</div>";
+            
+        }
+        html += "</div></fieldset>";
+    }
+    document.getElementById("area").innerHTML=html;
+}
+buildColors();
+</script>
+     
+    
+  </body>
+</html>

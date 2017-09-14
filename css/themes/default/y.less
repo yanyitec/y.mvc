@@ -1,0 +1,142 @@
+@import "color.less";
+@import "common.less";
+@import "icon.less";
+@import "layout.less";
+@import "panel.less";
+@import "form.less";
+
+@col-count:12; 
+
+.viewport( 
+    @viewport,//视图类型
+    @col-count,//栅栏列数量
+    @max-width,//最大行宽
+    @viewport-max-width,//视图宽
+    @viewport-min-width,//视图宽
+    @min-row-width,//最小行宽
+    @margin-vertical,//垂直外补
+    @margin-horizen, //水平外补
+    @padding,
+    @font-size,
+    @radius,
+    @shadow
+){
+    @media screen 
+    and (min-width: @viewport-min-width) 
+    and (max-width: @viewport-max-width){
+        .gen-layout(
+            @viewport,
+            @col-count,
+            @min-row-width,
+            @max-width,
+            @margin-vertical,
+            @margin-horizen, 
+            @font-size
+        );
+        .gen-panel(
+            @font-size*1.2,
+            @padding,
+            @bdr-color,
+            @radius,
+            @hd-fr-color,
+            @hd-bg-color,
+            @bd-fr-color,
+            @bd-bg-color,
+            @ft-fr-color,
+            @ft-bg-color
+        );
+        .gen-form(
+            @font-size,
+            @padding,
+            @radius,
+            @input-bdr-color,
+            @input-input-color,
+            @input-focus-color,
+            @input-fr-color,
+            @input-bg-color
+        );
+    }
+    
+}
+
+.gen-cols(@col-count);
+@xs-width:350px;
+@sm-width:500px;
+@md-width:800px;
+@lg-width:1024px;
+@gl-width:1280px;
+//great larg
+.viewport(
+    gl,//视图类型 great large 1280*1024
+    @col-count,//栅栏列数量
+    1280px,//最大行宽
+    4096px,//视图宽-max
+    1280px,//视图宽-min
+    320px,//最小行宽
+    5px,//垂直外补
+    5px, //水平外补
+    5px,
+    14px,//字体
+    6px,//圆角效果
+    3px
+);
+.viewport(
+    lg,//视图类型 large 1024*768
+    @col-count,//栅栏列数量
+    1000px,//最大行宽
+    1024px,//视图宽
+    800px,//视图宽
+    200px,//最小行宽
+    5px,//垂直外补
+    5px, //水平外补
+    4px,
+    12px,//字体
+    5px,//圆角效果
+    3px
+);
+.viewport(
+    md,//视图类型 middle 800*600
+    @col-count,//栅栏列数量
+    800px,//最大行宽
+    800px,//视图宽-max
+    500px,//视图宽
+    250px,//最小行宽
+    4px,//垂直外补
+    4px, //水平外补
+    3px,
+    12px,//字体
+    5px,//圆角效果
+    3px
+);
+.viewport(
+    sm,//视图类型 small 500*320
+    @col-count,//栅栏列数量
+    500px,//最大行宽
+    500px,//视图宽-max
+    300px,//视图宽-min
+    250px,//最小行宽
+    4px,//垂直外补
+    3px, //水平外补
+    2px,
+    12px,//字体
+    5px,//圆角效果
+    3px
+);
+.viewport(
+    xs,//视图类型 ex small 320
+    @col-count,//栅栏列数量
+    320px,//最大行宽
+    320px,//视图宽-max
+    0px,//视图宽-min
+    320px,//最小行宽
+    2px,//垂直外补
+    2px, //水平外补
+    1px,
+    10px,//字体
+    4px,//圆角效果
+    2px
+);
+
+
+
+

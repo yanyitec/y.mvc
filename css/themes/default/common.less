@@ -1,0 +1,53 @@
+
+.strong{
+    font-weight:bold;
+}
+
+.btn{
+    border:1px solid @bdr-color;
+    background-color:@default-color;
+}
+.btn-primary{
+    background-color: @primary-color;
+}
+.btn-success{
+    background-color: @success-color;
+}
+.btn-error{
+    background-color:@error-color;
+}
+.btn-warn{
+    background-color: @warn-color;
+}
+
+.gen-group(@group-name,@font-size,@padding,@radius,@bdr-color){
+    .@{group-name}-group{
+        box-sizing: border-box;
+        display: table;
+        padding:0;
+        margin:0;
+        &>*{
+            display: table-cell;
+            box-sizing: border-box;
+            border:1px solid @bdr-color;
+            border-radius: 0;
+            //margin:@margin-horizen 0;
+            line-height: @font-size;
+            border-right:0;
+            background-color:@bg-color;
+            width:1%;
+            white-space:nowrap;
+            text-align: center;
+            vertical-align: middle;
+        }
+        &>*:first-child{
+            padding:@padding @radius;
+            border-radius: @radius 0 0 @radius;
+        }
+        &>*:last-child{
+            padding:@padding @radius;
+            border-right:1px solid @bdr-color;
+            border-radius:0 @radius @radius 0;
+        }
+    }
+}

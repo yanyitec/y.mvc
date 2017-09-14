@@ -1,0 +1,66 @@
+//.gen-form 主要处理form的各种输入元素:.input,input,select,textarea, input-group,input-caption
+.gen-form(
+    @font-size:14px,
+    @padding:3px,
+    @radius:4px,
+    @input-bdr-color:#146A6A,
+    @input-input-color:#F7F2EC,
+    @input-focus-color:#FEFBFA,
+    @input-fr-color:#5C5D52,
+    @input-bg-color:#d3d6cd
+){
+    .input,input[type='text'],input[type='password'],select,textarea{
+        border:1px solid @input-bdr-color;
+        border-radius: @radius;
+    }
+    .input-group{
+        margin:0;
+        box-sizing: border-box;
+        width:100%;
+        display: table;
+        
+        &>label,&>span,&>select,&>input,&>textarea, &>button {
+            display: table-cell;
+            box-sizing: border-box;
+            border:1px solid @input-bdr-color;
+            border-radius: 0;
+            //margin:@margin-horizen 0;
+            line-height: @font-size;
+            border-right:0;
+            background-color:@input-bg-color;
+            width:1%;
+            white-space:nowrap;
+            text-align: center;
+            vertical-align: middle;
+        }
+        
+        &>*:first-child{
+
+            padding:@padding @radius;
+            border-radius: @radius*0.8 0 0 @radius*0.8;
+        }
+        &>*:last-child{
+            padding:@padding @radius;
+            border-right:1px solid @input-bdr-color;
+            border-radius:0 @radius*0.8 @radius*0.8 0;
+        }
+        &>.input,&>input[type='text'],&>input[type='password'],&>select,&>textarea{
+            width:100%;
+            margin:0;
+            background-color:@input-input-color;
+            text-align: left;
+            
+        }
+        &>input:focus,&>select:focus,&>textarea:focus,&>button:focus{
+            box-shadow: none;
+            background-color: @input-focus-color;
+        }
+        &>.input-caption{
+            width:120px;
+            font-weight: bold;
+            text-align: right;
+        }
+        
+    }
+}
+    
