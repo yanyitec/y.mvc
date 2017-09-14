@@ -12,9 +12,6 @@
 ){
     .all{
         font-size:@font-size;
-        color:@fr-color;
-        background-color:@bg-color;
-        border:0;
         margin:@margin-vertical @margin-horizen;
         padding:@padding;
     }
@@ -35,8 +32,9 @@
     }
  
     .layout{
-        padding:0 ;
-        margin:@margin-vertical 0;
+        padding:0;
+        border:0;
+        margin:0;
         width:100%;
         font-size:0;
         clear:both;
@@ -56,7 +54,7 @@
           width: (@i * 100% / @col-count);
           display: inline-block;
           border:0 !important;
-          margin:0 !important;
+          box-sizing: border-box;
           padding:0 !important;
         }
         .gen-viewport-cols(@viewport,@col-count, (@i + 1));
@@ -72,7 +70,7 @@
         display: inline-block;
         border:0 !important;
         margin:0 !important;
-        padding:0 !important;
+        box-sizing: border-box;
     }
     .gen-cols(@col-count, (@i + 1));
 }

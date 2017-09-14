@@ -1,53 +1,51 @@
-
+html,body,*{
+    font-family:"Helvetica Neue",Helvetica,Arial,"Hiragino Sans GB","Hiragino Sans GB W3","WenQuanYi Micro Hei",sans-serif;
+    color:@fr-color;
+    background-color:@bg-color;
+    border:0;
+}
 .strong{
     font-weight:bold;
 }
 
-.btn{
-    border:1px solid @bdr-color;
-    background-color:@default-color;
+.btn-default{
+    background-color: @default-color;
 }
+
 .btn-primary{
+    color:@bg-color;
     background-color: @primary-color;
 }
 .btn-success{
+    color:@bg-color;
     background-color: @success-color;
 }
 .btn-error{
+    color:@bg-color;
     background-color:@error-color;
 }
 .btn-warn{
+    color:@bg-color;
     background-color: @warn-color;
 }
 
-.gen-group(@group-name,@font-size,@padding,@radius,@bdr-color){
-    .@{group-name}-group{
-        box-sizing: border-box;
-        display: table;
-        padding:0;
-        margin:0;
-        &>*{
-            display: table-cell;
-            box-sizing: border-box;
-            border:1px solid @bdr-color;
-            border-radius: 0;
-            //margin:@margin-horizen 0;
-            line-height: @font-size;
-            border-right:0;
-            background-color:@bg-color;
-            width:1%;
-            white-space:nowrap;
-            text-align: center;
-            vertical-align: middle;
-        }
-        &>*:first-child{
-            padding:@padding @radius;
-            border-radius: @radius 0 0 @radius;
-        }
-        &>*:last-child{
-            padding:@padding @radius;
-            border-right:1px solid @bdr-color;
-            border-radius:0 @radius @radius 0;
-        }
-    }
+.btn-default:hover{
+    color:@strong-fr-color;
+    background-color: @bg-color;
+}
+.btn-primary:hover{
+    color:@bg-color;
+    background-color: @primary-light-color;
+}
+.btn-success:hover{
+    color:@bg-color;
+    background-color: @success-light-color;
+}
+.btn-error:hover{
+    color:@bg-color;
+    background-color:@error-light-color;
+}
+.btn-warn:hover{
+    color:@bg-color;
+    background-color: @warn-light-color;
 }

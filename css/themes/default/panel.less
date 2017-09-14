@@ -3,14 +3,7 @@
     @hd-font-size,
     @padding,
     @bdr-color,
-    @radius,
-    @hd-fr-color,
-    @hd-bg-color,
-    
-    @bd-fr-color,
-    @bd-bg-color,
-    @ft-fr-color,
-    @ft-bg-color
+    @radius
 ){
     .panel{
         border:0;
@@ -26,11 +19,12 @@
             height:@hd-font-size + 2 + @padding*2.2;
             line-height: @hd-font-size  + @padding*2.2;
             clear: both;
+            display: block;
         }
         &>*:first-child{
-            border-top:1px solid @bdr-color;
-            border-left:1px solid @bdr-color;
-            border-right:1px solid @bdr-color;
+            border-top:1px solid @hd-bdr-color;
+            border-left:1px solid @hd-bdr-color;
+            border-right:1px solid @hd-bdr-color;
             border-radius: @radius @radius 0 0 ;
             padding:@padding*1.1 @radius;
         }
@@ -55,7 +49,9 @@
             border-radius:0 0 @radius @radius ;
             padding:@padding @radius;
         }
-        
+        &:hover{
+            box-shadow: 0 0 2px 2px @shadow-color;
+        }
         
     }
 }

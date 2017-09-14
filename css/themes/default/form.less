@@ -2,28 +2,26 @@
 .gen-form(
     @font-size:14px,
     @padding:3px,
-    @radius:4px,
-    @input-bdr-color:#146A6A,
-    @input-input-color:#F7F2EC,
-    @input-focus-color:#FEFBFA,
-    @input-fr-color:#5C5D52,
-    @input-bg-color:#d3d6cd
+    @radius:4px
 ){
     .input,input[type='text'],input[type='password'],select,textarea{
         border:1px solid @input-bdr-color;
         border-radius: @radius;
     }
     .input-group{
+        padding:0;
         margin:0;
         box-sizing: border-box;
         width:100%;
-        display: table;
+        display: inline-table;
+        border-radius:@radius;
         
         &>label,&>span,&>select,&>input,&>textarea, &>button {
             display: table-cell;
             box-sizing: border-box;
             border:1px solid @input-bdr-color;
             border-radius: 0;
+            margin:0;
             //margin:@margin-horizen 0;
             line-height: @font-size;
             border-right:0;
@@ -60,7 +58,9 @@
             font-weight: bold;
             text-align: right;
         }
-        
+        &:hover{
+            box-shadow: 0 0 2px 2px @shadow-color;
+        }
     }
 }
     
