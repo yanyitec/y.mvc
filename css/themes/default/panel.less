@@ -1,6 +1,7 @@
 //.gen-panel 生成:.penel, .penel>.head,.panel>.body,.panel>.foot
 .gen-panel(
-    @hd-font-size,
+    @margin-vertical,//垂直外补
+    @margin-horizen,//水平外补 
     @padding,
     @bdr-color,
     @radius
@@ -8,18 +9,18 @@
     .panel{
         border:0;
         padding:0;
+        margin:@margin-vertical @margin-horizen;
         border-radius: @radius;
         
         & > .head{
-            font-size:@hd-font-size;
-            font-weight: bold;
             background-color: @hd-bg-color;
             color:@hd-fr-color;
             margin:0; 
-            height:@hd-font-size + 2 + @padding*2.2;
-            line-height: @hd-font-size  + @padding*2.2;
             clear: both;
             display: block;
+        }
+        & > .head *{
+            color:@hd-fr-color;
         }
         &>*:first-child{
             border-top:1px solid @hd-bdr-color;
@@ -50,7 +51,7 @@
             padding:@padding @radius;
         }
         &:hover{
-            box-shadow: 0 0 2px 2px @shadow-color;
+            box-shadow: 0 0 @padding/2 @padding/2 @shadow-color;
         }
         
     }

@@ -3,7 +3,7 @@
 @import "icon.less";
 @import "layout.less";
 @import "panel.less";
-@import "form.less";
+@import "form.less"; 
 
 @col-count:12;     
 .viewport(
@@ -14,45 +14,68 @@
     @viewport-min-width,//视图宽
     @min-row-width,//最小行宽
     @margin-vertical,//垂直外补
-    @margin-horizen, //水平外补
+    @margin-horizen,//水平外补 
     @padding,
     @font-size,
     @radius,
     @shadow
-){
-    @media screen 
+){  
+    @media screen  
     and (min-width: @viewport-min-width) 
     and (max-width: @viewport-max-width){
+        h1{  
+            font-size:@font-size*1.5;
+            font-weight: bold;
+            padding:@padding;
+        }
+        h2{
+            font-size:@font-size*1.25;
+            font-weight: bold;
+            padding:@padding;
+        }
+        h3{
+            font-size:@font-size*1.25;
+            padding:@padding;
+        }
+        h4{
+            font-size:@font-size;
+            font-weight: bold;
+            padding:@padding;
+        }
+
         .gen-layout(
             @viewport,
             @col-count,
             @min-row-width,
-            @max-width,
-            @margin-vertical,
-            @margin-horizen, 
-            @font-size
+            @max-width, 
+            @font-size,
+            @padding
         );
         .gen-panel(
-            @font-size*1.2,
+            @margin-vertical,//垂直外补
+            @margin-horizen,//水平外补 
             @padding,
             @bdr-color,
             @radius
-        );
+        );   
         .gen-form(
             @font-size,
+            @margin-vertical,//垂直外补
+            @margin-horizen,//水平外补 
             @padding,
             @radius
-        );
-        .gen-btn(@font-size,@margin-vertical,@radius);
+        ); 
+        .gen-btn(@font-size,@margin-vertical,@margin-horizen,@padding,@radius);
+        .gen-caret(@radius - 1,@font-size/2-@radius/2);
     } 
 }
 
-.gen-cols(@col-count);
+
 @xs-width:350px;
 @sm-width:500px;
 @md-width:800px;
 @lg-width:1024px;
-@gl-width:1280px;
+@gl-width:1280px; 
 //great larg
 .viewport(
     gl,//视图类型 great large 1280*1024
@@ -72,7 +95,7 @@
     lg,//视图类型 large 1024*768
     @col-count,//栅栏列数量
     1000px,//最大行宽
-    1024px,//视图宽
+    1280px,//视图宽
     800px,//视图宽
     200px,//最小行宽
     5px,//垂直外补
@@ -117,50 +140,15 @@
     320px,//视图宽-max
     0px,//视图宽-min
     320px,//最小行宽
-    2px,//垂直外补
+    2px,//垂直外补 
     2px, //水平外补
     1px,
     10px,//字体
     4px,//圆角效果
     2px
 ); 
- 
-.gen-btn(@font-size,@margin-vertical,@radius){
-    .btn{
-        border:1px solid @input-bdr-color;
-        border-radius: @radius;
-        cursor: default;
-    }
-    .btn-group{
-        font-size:0;
-        padding:0; 
-        margin:0;
-        display: inline-table;
-        border-radius: @radius; 
-        text-align:center;
-        vertical-align: middle;
-        &>*{ 
-            .btn;
-            font-size:@font-size;
-            display: table-cell;
-            white-space:nowrap;
-            margin:0;
-            border-right:0;
-            border-radius: 0;
-            border-color:@strong-bdr-color;
-        }
-        &>*:first-child{
-            border-radius: @radius 0 0 @radius;
-        }
-        &>*:last-child{
-            border-right:1px solid @strong-bdr-color;
-            border-radius: 0 @radius @radius 0;
-        }
-        &:hover{
-            box-shadow: 0 0 2px 2px @shadow-color;
-        }
-    }
-}  
+
+
 
 
 

@@ -4,29 +4,31 @@ html,body,*{
     background-color:@bg-color;
     border:0;
 }
+
 .strong{
     font-weight:bold;
 }
 
 .btn-default{
-    background-color: @default-color;
+    background-color: @default-color !important;
+    color:@strong-fr-color !important;
 }
 
 .btn-primary{
-    color:@bg-color;
-    background-color: @primary-color;
+    color:@bg-color !important;;
+    background-color: @primary-color !important;;
 }
 .btn-success{
-    color:@bg-color;
-    background-color: @success-color;
+    color:@bg-color !important;;
+    background-color: @success-color !important;;
 }
 .btn-error{
-    color:@bg-color;
-    background-color:@error-color;
+    color:@bg-color !important;;
+    background-color:@error-color !important;
 }
 .btn-warn{
-    color:@bg-color;
-    background-color: @warn-color;
+    color:@bg-color !important;
+    background-color: @warn-color !important;
 }
 
 .btn-default:hover{
@@ -48,4 +50,100 @@ html,body,*{
 .btn-warn:hover{
     color:@bg-color;
     background-color: @warn-light-color;
+}
+.pull-left{float:left;}
+.pull-right{float:right;}
+.clear{clear:both;}
+
+
+// Dropdown arrow/caret
+
+.gen-btn(@font-size,@margin-vertical,@margin-horizen,@padding,@radius){
+    .btn{
+        border:1px solid @input-bdr-color;
+        border-radius: @radius;
+        cursor: default;
+        margin:@margin-vertical @margin-horizen;
+        padding:@padding;
+    } 
+    .btn-group{
+        display: inline-table;
+        border-radius:@radius;
+        
+        
+        &>*{ 
+            display: table-cell;
+            white-space:nowrap;
+            margin:0;
+            border:1px solid @strong-bdr-color;
+            padding:@padding;
+            border-right:0;
+            border-radius: 0;
+        }
+        &>*:first-child{
+            border-top-left-radius:  @radius;
+            border-bottom-left-radius:  @radius;
+        }
+        &>*:last-child{
+            border-right:1px solid @strong-bdr-color;
+            border-top-right-radius:  @radius;
+            border-bottom-right-radius:  @radius;
+        }
+        &:hover{
+            box-shadow: 0 0 2px 2px @input-shadow-color;
+        } 
+    }
+}  
+
+.gen-caret(@caret-size:6px,@margin-top:0){
+    .caret{
+        display: inline-block;
+        background-color:transparent;
+        padding:0;
+        padding-top:@caret-size/2;
+        margin-top:0;margin-bottom: 0;
+        width:@caret-size;
+        height: @caret-size;
+        border-top: @caret-size solid @caret-color;
+        border-left:  @caret-size solid transparent;
+        border-right:  @caret-size solid transparent;
+        border-bottom: 0;
+    }
+    .caret-down:extends(.caret){}
+    .caret-up{
+        display: inline-block;
+        background-color:transparent;
+        padding:0;
+        padding-top:@caret-size/2;
+        margin-top:0;margin-bottom: 0;
+        width:@caret-size;
+        height: @caret-size;
+        border-bottom: @caret-size solid @caret-color;
+        border-left:  @caret-size solid transparent;
+        border-right:  @caret-size solid transparent;
+        border-top:0;
+    }
+    .caret-left{
+        display: inline-block;
+        background-color:transparent;
+        padding:0;
+        margin-top:0;margin-bottom: 0;
+        
+        border-right: @caret-size solid @caret-color;
+        border-top:  @caret-size solid transparent;
+        border-bottom:  @caret-size solid transparent;
+        border-left:0;
+    }
+    .caret-right{
+        display: inline-block;
+        background-color:transparent;
+        padding:0;
+        margin-top:0;margin-bottom: 0;
+        width:@caret-size;
+        height: @caret-size;
+        border-left: @caret-size solid @caret-color;
+        border-top:  @caret-size solid transparent;
+        border-bottom:  @caret-size solid transparent;
+        border-right:0;
+    }
 }

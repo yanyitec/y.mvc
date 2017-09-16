@@ -6,14 +6,16 @@
     @col-count,//栅栏列数量
     @max-width,//最大行宽
     @min-row-width,//最小行宽
-    @margin-vertical,//垂直外补
-    @margin-horizen, //水平外补
-    @font-size
+    @font-size,
+    @padding
+  
 ){
     .all{
         font-size:@font-size;
-        margin:@margin-vertical @margin-horizen;
-        padding:@padding;
+        margin:0;
+        padding:0;
+        box-sizing: border-box;
+        background-color:transparent;
     }
     *:extend(.all){}
 
@@ -38,39 +40,47 @@
         width:100%;
         font-size:0;
         clear:both;
-        &>*{
-            font-size:@font-size;
-        }
+       
+    }
+
+    .spacing-layout{
+        .layout;
     }
     
-    .props-row:extends(.row){
+    .props-row{
         min-width:@min-row-width;
     }
     .@{viewport}-hidden{
         display: none;
     }
-    .gen-viewport-cols(@viewport, @col-count,@i: 1) when (@i <= @col-count) {
-        .@{viewport}-cols-@{i} {
+    .gen-viewport-cols(@viewport,@layout, @col-count,@padding,@i: 1) when (@i <= @col-count) {
+        .@{layout} > .@{viewport}-cols-@{i} {
           width: (@i * 100% / @col-count);
           display: inline-block;
           border:0 !important;
-          box-sizing: border-box;
-          padding:0 !important;
+          margin:0 !important;
+          box-sizing: border-box !important;
+          padding:@padding;
         }
-        .gen-viewport-cols(@viewport,@col-count, (@i + 1));
+        
+        .gen-viewport-cols(@viewport,@layout,@col-count,@padding, (@i + 1));
     }
-    .gen-viewport-cols(@viewport,@col-count);
+    .gen-viewport-cols(@viewport,layout,@col-count,0);
+    .gen-viewport-cols(@viewport,spacing-layout,@col-count,@padding);
 
+    .gen-cols( @col-count,@layout,@padding,@i: 1) when (@i <= @col-count) {
+        .@{layout} > .cols-@{i} {
+            width: (@i * 100% / @col-count);
+            display: inline-block;
+            border:0 !important;
+            margin:0 !important;
+            box-sizing: border-box;
+            padding:@padding;
+        }
+        .gen-cols(@col-count,@layout,@padding, (@i + 1));
+    }
     
+    .gen-cols(@col-count,layout,0);
+    .gen-cols(@col-count,spacing-layout,@padding);
 }
   
-.gen-cols( @col-count,@i: 1) when (@i <= @col-count) {
-    .cols-@{i} {
-        width: (@i * 100% / @col-count);
-        display: inline-block;
-        border:0 !important;
-        margin:0 !important;
-        box-sizing: border-box;
-    }
-    .gen-cols(@col-count, (@i + 1));
-}

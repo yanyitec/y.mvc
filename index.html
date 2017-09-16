@@ -25,16 +25,19 @@
   </head>
 
   <body>
-    <div>普通的文本</div>
+    <h1>普通的文本</h1>
     <div class="panel">
-      <div class="head">我是一个panel的标题</div>
+      <div class="head">
+        <h2 class="pull-left"><span class="icon icon-envelope"></span> 我是一个panel的标题</h2>
+        <span class="btn-group pull-right"><span class="btn btn-default ">新建</span></span>
+      </div>
       <div class="body ">
-        <div class="layout">
+        <div class="spacing-layout">
             <div class="cols-4">
                 <div class="input-group ">
                     <label class="input-caption">账号</label>
                     <input type="text" value="账号" />
-                    <span class='ins'>点击我</span>
+                    <span class='ins'>点击我<span class='caret-left'></span></span>
                     <span class='ins'>点击我</span>
                   </div>
             </div>
@@ -64,7 +67,7 @@
                     
                     <span class="btn-primary">主要</span>
                     <span class="btn-warn">警告</span>
-                    <a class="btn-success">通过</a>
+                    <a class="btn-success">通过<span class="caret1"></span></a>
                   </div>
             </div>
         </div>
