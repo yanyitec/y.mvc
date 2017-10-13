@@ -1,0 +1,67 @@
+@import "color.less";
+.grid-view{
+    display: table-row;
+    &>.grid-view-frozen{
+        display: table-cell;
+        margin:0;padding:0;
+    }
+    
+    &>.grid-view-scrollable{
+        display: table-cell;
+        margin:0;padding:0;
+    }
+    
+    .grid-view-cell{
+        position: relative;
+        margin:0;
+    }
+    .grid-column-resizer{
+        width:1px solid @strong-bdr-color;
+        font-size:1px;
+        position: absolute;
+        top:0;right:0;
+    }
+
+    table{
+        border:1px solid @bdr-color;
+        border-collapse: collapse;
+        
+        th{
+            background-color: @hd-bg-color;
+            color:@hd-fr-color;
+            font-weight: bold;
+            border:1px solid @hd-bdr-color;
+            border-collapse: collapse;
+            & *{
+                color:@hd-fr-color;
+                font-weight: bold;
+            }
+        }
+        td{
+            background-color: @bd-bg-color;
+            color:@bd-fr-color;
+            border:1px solid @bdr-color;
+            border-collapse: collapse;
+            & *{
+                color:@bd-fr-color;
+            }
+            
+        }
+    }
+
+    
+}
+.gen-grid(
+    @font-size:14px,
+    @margin-vertical,//垂直外补
+    @margin-horizen,//水平外补 
+    @padding:3px,
+    @radius:4px
+){
+    .grid-view{
+        .grid-view-cell{
+            padding:@padding;
+        }
+    }
+    
+}

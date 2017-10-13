@@ -861,6 +861,54 @@ body,
 .icon-menu-up:before {
   content: "\e260";
 }
+.grid-view {
+  display: table-row;
+}
+.grid-view > .grid-view-frozen {
+  display: table-cell;
+  margin: 0;
+  padding: 0;
+}
+.grid-view > .grid-view-scrollable {
+  display: table-cell;
+  margin: 0;
+  padding: 0;
+}
+.grid-view .grid-view-cell {
+  position: relative;
+  margin: 0;
+}
+.grid-view .grid-column-resizer {
+  width: 1px solid #191A13;
+  font-size: 1px;
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+.grid-view table {
+  border: 1px solid #9A9B94;
+  border-collapse: collapse;
+}
+.grid-view table th {
+  background-color: #001187;
+  color: #fcfce3;
+  font-weight: bold;
+  border: 1px solid #191A13;
+  border-collapse: collapse;
+}
+.grid-view table th * {
+  color: #fcfce3;
+  font-weight: bold;
+}
+.grid-view table td {
+  background-color: #F7F2EC;
+  color: #5C5D52;
+  border: 1px solid #9A9B94;
+  border-collapse: collapse;
+}
+.grid-view table td * {
+  color: #5C5D52;
+}
 @media screen and (min-width: 1280px) and (max-width: 4096px) {
   h1 {
     font-size: 21px;
@@ -1510,6 +1558,9 @@ body,
     border-top: 5px solid transparent;
     border-bottom: 5px solid transparent;
     border-right: 0;
+  }
+  .grid-view .grid-view-cell {
+    padding: 5px;
   }
 }
 @media screen and (min-width: 800px) and (max-width: 1280px) {
@@ -2162,6 +2213,9 @@ body,
     border-bottom: 4px solid transparent;
     border-right: 0;
   }
+  .grid-view .grid-view-cell {
+    padding: 4px;
+  }
 }
 @media screen and (min-width: 500px) and (max-width: 800px) {
   h1 {
@@ -2812,6 +2866,9 @@ body,
     border-top: 4px solid transparent;
     border-bottom: 4px solid transparent;
     border-right: 0;
+  }
+  .grid-view .grid-view-cell {
+    padding: 3px;
   }
 }
 @media screen and (min-width: 300px) and (max-width: 500px) {
@@ -3464,6 +3521,9 @@ body,
     border-bottom: 4px solid transparent;
     border-right: 0;
   }
+  .grid-view .grid-view-cell {
+    padding: 2px;
+  }
 }
 @media screen and (min-width: 0px) and (max-width: 320px) {
   h1 {
@@ -4114,5 +4174,8 @@ body,
     border-top: 3px solid transparent;
     border-bottom: 3px solid transparent;
     border-right: 0;
+  }
+  .grid-view .grid-view-cell {
+    padding: 1px;
   }
 }

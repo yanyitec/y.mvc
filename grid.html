@@ -1,0 +1,50 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- 上述3个meta标签*必须*放在最前面，任何其他内容都*必须*跟随其后！ -->
+    <meta name="description" content="">
+    <meta name="author" content="">
+    <link rel="icon" href="">
+
+    <title>Dashboard Template for Bootstrap</title>
+    
+    <!-- Custom styles for this template -->
+    <link href="css/themes/default/y.css" rel="stylesheet">
+    <script type="text/javascript" src="js/y.grid.js"></script>
+    
+
+    <!-- HTML5 shim and Respond.js for IE8 support of HTML5 elements and media queries -->
+    <!--[if lt IE 9]>
+      <script src="js/html5shiv.min.js"></script>
+      <script src="js/respond.js"></script>
+    <![endif]-->
+  </head>
+
+  <body>
+    <span>aaa</span>
+    <div id="grid"></div>
+    <span>bbb</span>
+    <script src="js/jquery-3.2.1.js"></script>
+    <script type="text/javascript">
+      var opts = {
+        width:200,
+        columns:{
+          "Id":{frozen:true},
+          "Name":{frozen:true},
+          "Nick":{},
+          "Password":{},
+          "Description":{width:200}
+        },
+        data:[
+          {Id:1,Name:"yiy",Nick:"yi",Password:"111"}
+          ,{Id:2,Name:"yanyi",Nick:"yan",Password:"2"}
+        ]
+      };
+      var grid = new Y.Grid(document.getElementById("grid"),opts);
+    </script>
+  </body>
+</html>
