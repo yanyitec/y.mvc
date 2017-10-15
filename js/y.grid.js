@@ -1,48 +1,109 @@
 var Y;
 (function (Y) {
-    var Column = (function () {
-        function Column(name, opts, grid) {
-            this.gridInstance = grid;
+    var GridColumn = (function () {
+        function GridColumn(name, opts, grid) {
+            this.grid = grid;
             this._width = opts.width;
             this._resizeable = opts.resizeable;
             this._cell = opts.cell;
             this.name = opts.name || name;
-            this._text = opts.text || this.name;
+            this._text = opts.text || grid.label(this.name);
             this._frozen = opts.frozen;
-            var th = this.th = document.createElement("th");
+            var th = this.element = this.th = document.createElement("th");
             th.innerHTML = "<div class='grid-view-cell' style='position:relative;overflow:hidden;" + (this._width ? "width:" + this._width + "px" : "") + "'><div class='caption'>" + (this._text) + "</div><div class='grid-column-resizer'></div></div>";
             this._lit = th.firstChild;
             this._resizer = th.lastChild;
+            this.cells = [];
         }
-        Column.prototype.frozen = function (value) {
+        GridColumn.prototype.frozen = function (value) {
             if (value === undefined)
                 return this._frozen;
-            throw "Not implement";
+            if (this._frozen != value) {
+                this._frozen = value;
+                this.grid.refreshView();
+            }
+            return this;
         };
-        Column.prototype.width = function (value) {
+        GridColumn.prototype.width = function (value) {
             if (value === undefined)
                 return this._width;
-            throw "Not implement";
+            if (this._width != value) {
+                this._width = value;
+                this.grid.refreshView();
+            }
+            return this;
         };
-        Column.prototype.createCell = function (rowData) {
-            var cell = document.createElement("td");
-            var val = rowData[this.name];
-            cell.innerHTML = "<div style='width:" + this._width + "px;overflow:hidden;' class='grid-view-cell'>" + (val === undefined || val === null ? "" : val.toString()) + "</div>";
-            return cell;
+        GridColumn.prototype.createCellElement = function (row) {
+            var elem = document.createElement("td");
+            var val = row.data[this.name];
+            elem.innerHTML = "<div style='" + (this._width ? "width:" + this._width + "px" : "") + ";overflow:hidden;' class='grid-view-cell'>" + (val === undefined || val === null ? "" : val.toString()) + "</div>";
+            return elem;
         };
-        return Column;
+        return GridColumn;
     }());
-    Y.Column = Column;
+    Y.GridColumn = GridColumn;
+    var GridCell = (function () {
+        function GridCell(col, row) {
+            this.column = col;
+            this.row = row;
+            this.element = this.td = col.createCellElement(row);
+        }
+        return GridCell;
+    }());
+    Y.GridCell = GridCell;
+    var GridRow = (function () {
+        function GridRow(grid, index, data) {
+            this.grid = grid;
+            this.index = index;
+            this.data = data;
+            var cols = grid.columns;
+            var frozenTr;
+            var scrollableTr;
+            var cells = this.cells = {};
+            for (var n in cols) {
+                var col = cols[n];
+                var cell = new GridCell(col, this);
+                col.cells[index] = cells[col.name] = cell;
+                if (col.frozen()) {
+                    if (!frozenTr)
+                        frozenTr = document.createElement("tr");
+                    frozenTr.appendChild(cell.element);
+                }
+                else {
+                    if (!scrollableTr)
+                        scrollableTr = document.createElement("tr");
+                    scrollableTr.appendChild(cell.element);
+                }
+            }
+            if (frozenTr)
+                this.grid._frozenTBody.appendChild(frozenTr);
+            if (scrollableTr)
+                this.grid._scrollableTBody.appendChild(scrollableTr);
+        }
+        return GridRow;
+    }());
+    Y.GridRow = GridRow;
     var Grid = (function () {
         function Grid(element, opts) {
             this.element = element;
             this.opts = opts;
-            this._columns = {};
+            var lng = opts.lng;
+            if (opts.lng) {
+                if (typeof (opts.lng) === 'function')
+                    this.label = opts.lng;
+                else
+                    this.label = function (key) { return lng[key] || Grid.lng[key] || key; };
+            }
+            else {
+                this.label = function (key) { return Grid.lng[key] || key; };
+            }
+            this.columns = {};
             var colOpts = opts.columns;
+            var i = 0;
             for (var n in colOpts) {
                 var colOpt = colOpts[n];
-                var col = new Column(n, colOpt, this);
-                this._columns[col.name] = col;
+                var col = new GridColumn(n, colOpt, this);
+                this.columns[col.name] = col;
                 if (col.frozen())
                     this.frozenWidth = -1;
             }
@@ -52,6 +113,7 @@ var Y;
         }
         Grid.prototype.refreshView = function () {
             var _this = this;
+            this.rows = [];
             var viewArea = this._viewArea = document.createElement("div");
             this._viewArea.className = "grid-view";
             var viewHTML = "<div class='grid-view-frozen'>";
@@ -62,11 +124,14 @@ var Y;
             viewHTML += "<div class='grid-view-scrollable-head head' style='overflow:hidden;'><table><thead><tr></tr></thead></table></div>";
             viewHTML += "<div  class='grid-view-scrollable-body body' style='overflow:auto;'><table><tbody></tbody></table></div>";
             viewHTML += "</div>";
+            viewHTML += "<div class='grid-view-pagination'>";
+            viewHTML += "";
+            viewHTML += "</div>";
             this._viewArea.innerHTML = viewHTML;
             this._frozenArea = viewArea.firstChild;
             this._frozenHeadRow = this._frozenArea.firstChild.firstChild.firstChild.firstChild;
             this._frozenTBody = this._frozenArea.lastChild.firstChild.firstChild;
-            this._scrollableArea = viewArea.lastChild;
+            this._scrollableArea = viewArea.childNodes[1];
             this._scrollableHeaderArea = this._scrollableArea.firstChild;
             this._scrollableHeadRow = this._scrollableHeaderArea.firstChild.firstChild;
             this._scrollableBodyArea = this._scrollableArea.lastChild;
@@ -78,7 +143,7 @@ var Y;
                 _this._scrollableArea.firstChild.scrollLeft =
                     _this._scrollableArea.lastChild.scrollLeft = _this._scrollableBodyArea.scrollLeft;
             };
-            var cols = this._columns;
+            var cols = this.columns;
             var frozenCount = 0;
             var needMeasureWidthCols = [];
             for (var n in cols) {
@@ -103,27 +168,8 @@ var Y;
             var rowDatas = this._rowDatas;
             for (var i = 0, j = rowDatas.length; i < j; i++) {
                 var rowData = rowDatas[i];
-                var frozenTr = void 0;
-                var scrollableTr = void 0;
-                var tr = void 0;
-                for (var n in cols) {
-                    var col = cols[n];
-                    if (col.frozen()) {
-                        if (!frozenTr)
-                            frozenTr = document.createElement("tr");
-                        tr = frozenTr;
-                    }
-                    else {
-                        if (!scrollableTr)
-                            scrollableTr = document.createElement("tr");
-                        tr = scrollableTr;
-                    }
-                    tr.appendChild(col.createCell(rowData));
-                }
-                if (frozenTr)
-                    this._frozenTBody.appendChild(frozenTr);
-                if (scrollableTr)
-                    this._scrollableTBody.appendChild(scrollableTr);
+                var row = new GridRow(this, i, rowData);
+                this.rows[i] = row;
             }
             this.element.innerHTML = "";
             this.element.appendChild(this._viewArea);
@@ -172,6 +218,7 @@ var Y;
             this._scrollableBodyArea.style.width = this._scrollableArea.firstChild.style.width = sw + "px";
             return this;
         };
+        Grid.lng = {};
         return Grid;
     }());
     Y.Grid = Grid;

@@ -5,22 +5,29 @@
   display: table-cell;
   margin: 0;
   padding: 0;
+  box-sizing: border-box;
 }
 .grid-view > .grid-view-scrollable {
   display: table-cell;
   margin: 0;
   padding: 0;
+  box-sizing: border-box;
 }
 .grid-view .grid-view-cell {
   position: relative;
   margin: 0;
 }
 .grid-view .grid-column-resizer {
-  width: 1px solid #191A13;
+  border: 0;
+  background-color: #191A13;
+  width: 1px;
   font-size: 1px;
   position: absolute;
   top: 0;
-  right: 0;
+  right: -1px;
+  cursor: col-resize;
+  height: 100%;
+  z-index: 999999;
 }
 .grid-view table {
   border: 1px solid #9A9B94;

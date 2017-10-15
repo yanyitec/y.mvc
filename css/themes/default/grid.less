@@ -4,22 +4,30 @@
     &>.grid-view-frozen{
         display: table-cell;
         margin:0;padding:0;
+        box-sizing: border-box;
     }
     
     &>.grid-view-scrollable{
         display: table-cell;
         margin:0;padding:0;
+        box-sizing: border-box;
     }
+    
     
     .grid-view-cell{
         position: relative;
         margin:0;
     }
     .grid-column-resizer{
-        width:1px solid @strong-bdr-color;
+        border:0;
+        background-color:@strong-bdr-color;
+        width:1px;
         font-size:1px;
         position: absolute;
-        top:0;right:0;
+        top:0;right:-1px;
+        cursor: col-resize;
+        height:100%;
+        z-index:999999;
     }
 
     table{
