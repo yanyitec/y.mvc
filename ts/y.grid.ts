@@ -89,7 +89,7 @@ namespace Y{
             let scrollableTr : HTMLTableRowElement ;
             let cells :{[index:string]:GridCell} = this.cells={};
             for(var n in cols){
-                let col:GridColumn = cols[n];
+                let col:GridColumn = cols[n]; 
                 let cell = new GridCell(col,this);
                 col.cells[index] = cells[col.name] = cell;
                 
